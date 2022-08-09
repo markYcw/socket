@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="60 seconds" debug="false">
+    <springProperty scope="context" name="logPath" source="logging.path" defaultValue="/opt/kedacom/web/logs"/>
+    <springProperty scope="context" name="springAppName" source="spring.application.name"/>
+    <property name="log.name.prefix" value="device"/>
+    <property name="log.path" value="${logPath}/device-server"/>
+    <property name="log.colorPattern"
+              value="%magenta(%d{yyyy-MM-dd HH:mm:ss.SSS}) %highlight(%-5level) %boldCyan(${springAppName:-}) %yellow(%thread) %green(%logger) %msg%n"/>
+    <property name="log.pattern" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%-5level] [${springAppName:-}] %thread %logger %msg%n"/>
+
+    <!--输出到控制台-->
+    <appender name="CST" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${log.colorPattern}</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+
+        <file>${log.path}/device.log</file>
+
+        <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">　　　　　
+            <fileNamePattern>${log.path}/device.%i.log</fileNamePattern>　　　　　　
+            <minIndex>1</minIndex>　　　　　　　　
+            <maxIndex>10</maxIndex>　　　
+        </rollingPolicy>
+
+        <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">　　　　
+            <maxFileSize>50MB</maxFileSize>　　
+        </triggeringPolicy>
+
+        <encoder>
+            <pattern>${log.pattern}</pattern>
+        </encoder>
+    </appender>
+
+    <root>
+        <level value="INFO"/>
+        <appender-ref ref="CST"/>
+        <appender-ref ref="FILE"/>
+    </root>
+
+</configuration>
