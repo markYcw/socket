@@ -16,9 +16,9 @@ import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
+ * @describe socket通信客户端
  * @author mark
  * @date 2022/8/2 11:12
- * @describe socket通信客户端
  */
 @Slf4j
 @Component
@@ -29,22 +29,35 @@ public class Client {
      */
     private ConcurrentHashMap<String, SocketChannel> channels = new ConcurrentHashMap<>();
 
+    /**
+     * ByteBuffer客户端读取服务端发来的信息或者是写入信息给服务端都通过这个字节缓冲区
+     */
     private final ByteBuffer buffer = ByteBuffer.allocate(100);
 
+    /**
+     * 选择器
+     */
     private Selector selector;
 
+    /**
+     * 连接服务端
+     * @param ip 服务端IP
+     * @param clientId 客户端ID
+     * @param port 服务端端口
+     * @throws IOException IO异常
+     */
     public void connect(String ip, String clientId, Integer port) throws IOException {
 
-        //得到一个网络通道
+        // 得到一个网络通道
         SocketChannel socketChannel = SocketChannel.open();
 
-        //设置为非阻塞
+        // 设置为非阻塞
         socketChannel.configureBlocking(false);
 
-        //根据服务端的ip和端口
+        // 根据服务端的ip和端口
         InetSocketAddress inetSocketAddress = new InetSocketAddress(ip, port);
 
-        //连接服务器
+        // 连接服务器
         if (!socketChannel.connect(inetSocketAddress)) {
 
             while (!socketChannel.finishConnect()) {
@@ -52,18 +65,23 @@ public class Client {
             }
         }
 
-        //如果连接成功，就发送数据
+        // 如果连接成功，就发送数据
         channels.put(clientId, socketChannel);
         buffer.clear();
-        //给服务端发送登录消息，消息格式：login+clientId
+        // 给服务端发送登录消息，消息格式：login+clientId
         String str = "login" + clientId;
         buffer.put(str.getBytes(StandardCharsets.UTF_8));
         buffer.flip();
-        //发送数据，将buffer数据写入channel
+        // 发送数据，将buffer数据写入channel
         socketChannel.write(buffer);
         register(socketChannel);
     }
 
+    /**
+     * 注册感兴趣事件到selector
+     * @param socketChannel 信道
+     * @throws IOException IO异常
+     */
     public void register(SocketChannel socketChannel) throws IOException {
         // 打开多路复用器
         selector = Selector.open();
@@ -71,11 +89,14 @@ public class Client {
         readMsg();
     }
 
+    /**
+     * 多路复用部分。当select检测到有可读事件则读取服务端所发来的信息
+     */
     public void readMsg() {
         while (true) {
             try {
                 selector.select();
-                //获取注册在selector上的所有的就绪状态的serverSocketChannel中发生的事件
+                // 获取注册在selector上的所有的就绪状态的serverSocketChannel中发生的事件
                 Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
                 while (keys.hasNext()) {
                     SelectionKey key = keys.next();
@@ -100,21 +121,23 @@ public class Client {
     }
 
     /**
-     * 处理数据
+     * 处理服务端发来数据
+     * @param key SelectionKey
+     * @throws IOException IO异常
      */
     private void handleInput(SelectionKey key) throws IOException {
 
         SocketChannel sc = (SocketChannel) key.channel();
-        if (key.isConnectable()) { //处于连接状态
-            if (sc.finishConnect()) {//客户端连接成功
-                //注册到selector为 可读状态
+        if (key.isConnectable()) { // 处于连接状态
+            if (sc.finishConnect()) {// 客户端连接成功
+                // 注册到selector为 可读状态
                 sc.register(selector, SelectionKey.OP_READ);
                 byte[] requestBytes = "客户端发送数据.".getBytes();
                 ByteBuffer bf = ByteBuffer.allocate(requestBytes.length);
                 bf.put(requestBytes);
-                //缓冲区复位
+                // 缓冲区复位
                 bf.flip();
-                //发送数据
+                // 发送数据
                 sc.write(bf);
             }
         }
@@ -142,7 +165,7 @@ public class Client {
      * 给服务端发送消息
      *
      * @param clientId 客户端id
-     * @param msg      要给服务端发送的信息
+     * @param msg 要给服务端发送的信息
      * @throws IOException
      */
     public void sendMsg(String clientId, String msg) throws IOException {

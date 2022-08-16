@@ -13,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 
 
 /**
+ * @describe 服务初始化类：当容器完成初始化后时候初始化一些动作
  * @author mark
  * @date 2022/7/29 15:20
  */

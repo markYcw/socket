@@ -24,7 +24,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 public class Server {
-
+    /**
+     * ByteBuffer 字节缓冲区用于写信息给客户端
+     */
     private final ByteBuffer buffer = ByteBuffer.allocate(70);
 
     /**
@@ -32,14 +34,18 @@ public class Server {
      */
     private Worker worker;
 
+    /**
+     * 开启服务端
+     * @throws IOException IO异常
+     */
     public void startServer() throws IOException {
         ServerSocketChannel ssc = ServerSocketChannel.open();
         ssc.configureBlocking(false);
-        //专用于链接事件
+        // 专用于链接事件
         Selector boss = Selector.open();
         ssc.register(boss, SelectionKey.OP_ACCEPT);
         ssc.bind(new InetSocketAddress(9998));
-        //创建固定数量的worker
+        // 创建固定数量的worker
         worker = new Worker("worker=0");
         while (true) {
             boss.select();
@@ -51,7 +57,7 @@ public class Server {
                     SocketChannel sc = ssc.accept();
                     sc.configureBlocking(false);
                     log.info("===connected...{}", sc.getRemoteAddress());
-                    //2关联selector
+                    // 2关联selector
                     log.info("=====beforeRegister{}", sc.getRemoteAddress());
                     worker.register(sc); //boss调用 初始化worker的selector 启动线程
                     log.info("====afterRegister{}", sc.getRemoteAddress());
@@ -62,7 +68,7 @@ public class Server {
 
     /**
      * 向全员发消息相当于群聊功能
-     *
+     * @throws InterruptedException 中断异常
      * @param message 群聊消息
      */
     public void sendAll(String message) throws InterruptedException {
@@ -84,12 +90,12 @@ public class Server {
 
     /**
      * 私聊功能 私聊功能--send-text两位字符作为客户端ID
-     *
+     * @throws InterruptedException 中断异常
      * @param message 服务端给客户端私发消息是携带客户端id的(clientId+message)
      */
     public void sendSingle(String message) throws InterruptedException {
         byte[] bytes = message.getBytes(StandardCharsets.UTF_8);
-        //先提取客户ID
+        // 先提取客户ID
         String id = message.substring(11, 13);
         if (worker.getClients().get(id) == null) {
             return;
@@ -110,7 +116,7 @@ public class Server {
     /**
      * 发送消息给客户端
      *
-     * @param msg           消息正文
+     * @param msg 消息正文
      * @param socketChannel 客户端信道
      */
     public void sendMsg(String msg, SocketChannel socketChannel) {
@@ -147,8 +153,14 @@ class Worker implements Runnable {
      */
     private ConcurrentHashMap<Integer, SelectionKey> keys = new ConcurrentHashMap<>();
 
+    /**
+     * 用于启动worker
+     */
     private Thread thread;
 
+    /**
+     * 多路复用选择器
+     */
     private Selector selector;
 
     /**
@@ -167,19 +179,26 @@ class Worker implements Runnable {
         this.name = name;
     }
 
+    /**
+     * 获取客户端map
+     * @return
+     */
     public ConcurrentHashMap<String, Integer> getClients() {
         return clients;
     }
 
+    /**
+     * 获取信道map
+     * @return
+     */
     public ConcurrentHashMap<Integer, SocketChannel> getSockets() {
         return sockets;
     }
 
     /**
      * 注册读写事件
-     *
      * @param sc SocketChannel
-     * @throws IOException
+     * @throws IOException IO异常
      */
     public void register(SocketChannel sc) throws IOException {
         if (!start) {
@@ -188,34 +207,34 @@ class Worker implements Runnable {
             thread.start();
             start = true;
         }
-        selector.wakeup();//唤醒selector
+        selector.wakeup();// 唤醒selector
         sc.register(selector, SelectionKey.OP_READ);
     }
 
     /**
      * 读取客户端消息 客户端第一个消息格式必须是登录消息，消息格式为：login+客户端ID，维护端ID为2位
-     *
+     * @throws IOException IO异常
      * @param source 用来读取消息的buffer
      * @param key    SelectionKey
      */
     public void readMsg(ByteBuffer source, SelectionKey key, SocketChannel channel) throws IOException {
         source.flip();
-        //判断是否登录消息，如果第一个不是登录消息则断开与客户端连接
+        // 判断是否登录消息，如果第一个不是登录消息则断开与客户端连接
         // 读取readBuf数据 然后打印数据
         byte[] bytes = new byte[source.remaining()];
         source.get(bytes);
         String s = new String(bytes);
-        //现在只有两种情况：第一种情况这个消息为登录消息消息,格式为：login+clientId，另一种情况:此消息是个普通消息
+        // 现在只有两种情况：第一种情况这个消息为登录消息消息,格式为：login+clientId，另一种情况:此消息是个普通消息
         String msg = s.substring(0, 5);
         InetSocketAddress address = (InetSocketAddress) channel.getRemoteAddress();
         int port = address.getPort();
         if (msg.equals("login")) {
-            //如果是登录消息判断是不是第一次登录消息，如果不是第一次登录根据这个ID肯定是在容器里能找到信道，则断开连接
-            //获取客户端ID
+            // 如果是登录消息判断是不是第一次登录消息，如果不是第一次登录根据这个ID肯定是在容器里能找到信道，则断开连接
+            // 获取客户端ID
             String clientId = s.substring(5, 7);
             Integer clientPort = clients.get(clientId);
             if (clientPort != null) {
-                //如果如果收到重复的clientId，则断开前一个连接
+                // 如果如果收到重复的clientId，则断开前一个连接
                 log.info("==========同一个客户端登录断开之前客户端连接=======");
                 SelectionKey selectionKey = keys.get(clientPort);
                 selectionKey.cancel();
@@ -225,20 +244,20 @@ class Worker implements Runnable {
                 sockets.put(port, channel);
                 keys.put(port, key);
             } else {
-                //此情况为用户第一次登录，则存储用户信息
+                // 此情况为用户第一次登录，则存储用户信息
                 clients.put(clientId, port);
                 keys.put(port, key);
                 sockets.put(port, channel);
-                //服务端需显示客户端连接、断开信息，如：“client1 has connected”、“client1 has disconnected”
+                // 服务端需显示客户端连接、断开信息，如：“client1 has connected”、“client1 has disconnected”
                 StringBuilder m = new StringBuilder("");
                 m.append("client" + clientId + " has connected");
                 MsgHandler.getInstance().clientMsg(m);
             }
         } else {
-            //如果不是登录消息则判断这个信道是否在容器里如果不在容器里说明他发的第一个消息不是登录消息则断开连接，如果在容器里则有两种情况
-            //第一种情况是个普通消息，则给ServerMsgReceiver返回。另一种情况这个消息是个主动断开连接消息--disconnect-server+clientId
+            // 如果不是登录消息则判断这个信道是否在容器里如果不在容器里说明他发的第一个消息不是登录消息则断开连接，如果在容器里则有两种情况
+            // 第一种情况是个普通消息，则给ServerMsgReceiver返回。另一种情况这个消息是个主动断开连接消息--disconnect-server+clientId
             if (check(port)) {
-                //如果存在给ServerMsgReceiver返回
+                // 如果存在给ServerMsgReceiver返回
                 String clientId = getClientId(port);
                 StringBuilder message = new StringBuilder("");
                 source.rewind();
@@ -247,12 +266,12 @@ class Worker implements Runnable {
                     message.append((char) b);
                 }
                 if (message.charAt(2) == 'd') {
-                    //如果是断开客户端连接就是断开相应的客户端连接
+                    // 如果是断开客户端连接就是断开相应的客户端连接
                     offLine(channel);
                 } else {
-                    //如果是普通消息就进行返显
+                    // 如果是普通消息就进行返显
                     source.rewind();
-                    //要给ui进行返显的消息
+                    // 要给ui进行返显的消息
                     StringBuilder m = new StringBuilder("");
                     m.append(clientId + ":");
                     for (int j = 0; j < source.limit(); j++) {
@@ -271,6 +290,7 @@ class Worker implements Runnable {
 
     /***
      * 判断此客户端是否已经登录，如果登录则返回ture，否则返回false
+     * clientPort 客户端端口
      * @return
      */
     public Boolean check(Integer clientPort) throws IOException {
@@ -315,7 +335,7 @@ class Worker implements Runnable {
         SelectionKey key = keys.get(port);
         key.cancel();
         keys.remove(socketChannel);
-        //服务端需显示客户端连接、断开信息，如：“client1 has connected”、“client1 has disconnected”
+        // 服务端需显示客户端连接、断开信息，如：“client1 has connected”、“client1 has disconnected”
         StringBuilder m = new StringBuilder("");
         String clientId = getClientId(port);
         m.append("client" + clientId + " has disconnected");
@@ -347,17 +367,17 @@ class Worker implements Runnable {
                     if ((key.isReadable())) {
                         try {
                             SocketChannel channel = (SocketChannel) key.channel();
-                            int read = channel.read(buffer); //如果客户端是正常断开的话，read方法的返回值是-1
+                            int read = channel.read(buffer); // 如果客户端是正常断开的话，read方法的返回值是-1
                             if (read == -1) {
                                 key.cancel();
-                                //从client中移除下线的客户端
+                                // 从client中移除下线的客户端
                                 offLine(channel);
                             } else {
                                 readMsg(buffer, key, channel);
                             }
                         } catch (IOException e) {
                             e.printStackTrace();
-                            //如果客户端被强制关闭那么把key从selectedKey集合中移除
+                            // 如果客户端被强制关闭那么把key从selectedKey集合中移除
                         }
                     }
                 }

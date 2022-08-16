@@ -13,9 +13,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
+ * @describe 消息处理转发类
  * @author mark
  * @date 2022/7/29 15:18
- * @describe 消息处理转发类
  */
 @Slf4j
 public class MsgHandler {
@@ -26,6 +26,9 @@ public class MsgHandler {
      */
     private ConcurrentHashMap<String, JTextArea> areas = new ConcurrentHashMap<>();
 
+    /**
+     * 实例本身
+     */
     private static volatile MsgHandler instance;
 
     private MsgHandler() {
@@ -48,7 +51,7 @@ public class MsgHandler {
      * @param message 消息
      */
     public void toServer(String message) {
-        //判断是不是给全员发消息 --send-text-to-all第十三个字符是t为判断标准
+        // 判断是不是给全员发消息 --send-text-to-all第十三个字符是t为判断标准
         if (message.charAt(12) == 't') {
             sendServerAll(message);
         } else {
@@ -62,12 +65,12 @@ public class MsgHandler {
      * @param message 消息 对于客户端总共有连接/普通聊天消息/关闭连接消息
      */
     public void toClient(String message, JTextArea area) {
-        //判断是普通消息还是链接消息
+        // 判断是普通消息还是链接消息
         if (message.charAt(2) == 'c') {
-            //连接到服务端 --connect-server 127.0.0.1 9001 01其中01是客户端id
+            // 连接到服务端 --connect-server 127.0.0.1 9001 01其中01是客户端id
             CompletableFuture.runAsync(() -> this.connectToServer(message, area));
         } else {
-            //发送消息给服务端 发送消息格式为命令+客户端id+消息内容
+            // 发送消息给服务端 发送消息格式为命令+客户端id+消息内容
             CompletableFuture.runAsync(() -> msgToServer(message));
         }
     }
@@ -94,14 +97,14 @@ public class MsgHandler {
      */
     public void msgToServer(String message) {
         try {
-            //先判断是不是关闭连接消息
+            // 先判断是不是关闭连接消息
             if (message.charAt(2) == 'd') {
                 ContextUtils.getBean(Client.class).sendMsg(message.substring(19, 21), message);
             } else {
-                //普通消息
+                // 普通消息
                 String clientId = message.substring(21, 23);
                 if (message.length() > 73) {
-                    //如果消息超过50个字符分两次发送
+                    // 如果消息超过50个字符分两次发送
                     ContextUtils.getBean(Client.class).sendMsg(clientId, message.substring(23, 72));
                     Thread.sleep(500);
                     ContextUtils.getBean(Client.class).sendMsg(clientId, message.substring(73, message.length()));
@@ -163,11 +166,11 @@ public class MsgHandler {
         String s = "server:";
         String clientId = msg.substring(0, 2);
         if (check(clientId)) {
-            //如果能找到说明是私发功能
+            // 如果能根据客户端ID找到对应客户端则说明是私发功能，否则是群发消息
             JTextArea jTextArea = areas.get(clientId);
             jTextArea.append(s + msg);
         } else {
-            //群发消息
+            // 群发消息
             Iterator<Map.Entry<String, JTextArea>> iterator = areas.entrySet().iterator();
             while (iterator.hasNext()) {
                 Map.Entry<String, JTextArea> entry = iterator.next();

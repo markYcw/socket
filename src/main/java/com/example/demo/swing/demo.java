@@ -1,6 +1,5 @@
 package com.example.demo.swing;
 
-import javafx.event.EventDispatchChain;
 import lombok.Data;
 
 import javax.swing.*;
@@ -8,9 +7,9 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 /**
+ * @describe SWING测试demo
  * @author mark
  * @date 2022/7/29 16:22
- * @describe
  */
 @Data
 public class demo {
