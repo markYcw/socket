@@ -26,7 +26,6 @@ package socket聊天后台{
     }
     ServerMsgReceiver"用户按下按钮把UI消息转发给MsgHandler" --> MsgHandler
     MsgHandler“消息处理：如判断是群发还是私聊消息，然后把消息转发给Server” --> Server
-    Server"把消息转发给客户端"--> Client
     Client"客户端收到服务端消息后把消息转发给MsgHandler"--> MsgHandler
     MsgHandler“消息处理交给客户端UI进行渲染”--> ClientMsgReceiver
 }
