@@ -2,9 +2,10 @@ package com.example.demo.swing;
 
 import com.example.demo.client.Client;
 import com.example.demo.server.Server;
-import com.example.demo.utils.ContextUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
+import javax.annotation.Resource;
 import javax.swing.*;
 import java.io.IOException;
 import java.util.Iterator;
@@ -18,7 +19,18 @@ import java.util.concurrent.ConcurrentHashMap;
  * @date 2022/7/29 15:18
  */
 @Slf4j
+@Component
 public class MsgHandler {
+
+    @Resource
+    private Client client;
+
+    @Resource
+    private Server server;
+
+    @Resource
+    private ServerMsgUi serverMsgUi;
+
 
     /**
      * 用于对客户端UI进行信息返显
@@ -27,35 +39,16 @@ public class MsgHandler {
     private ConcurrentHashMap<String, JTextArea> areas = new ConcurrentHashMap<>();
 
     /**
-     * 实例本身
-     */
-    private static volatile MsgHandler instance;
-
-    private MsgHandler() {
-    }
-
-    public static MsgHandler getInstance() {
-        if (null == instance) {
-            synchronized (MsgHandler.class) {
-                if (null == instance) {
-                    instance = new MsgHandler();
-                }
-            }
-        }
-        return instance;
-    }
-
-    /**
      * 处理消息后把消息转发给服务端
      *
      * @param message 消息
      */
-    public void toServer(String message) {
+    public void dealMsg(String message) {
         // 判断是不是给全员发消息 --send-text-to-all第十三个字符是t为判断标准
         if (message.charAt(12) == 't') {
-            sendServerAll(message);
+            sendAllMsgToServer(message);
         } else {
-            sendServerSingle(message);
+            sendSingleMsgToServer(message);
         }
     }
 
@@ -64,7 +57,7 @@ public class MsgHandler {
      *
      * @param message 消息 对于客户端总共有连接/普通聊天消息/关闭连接消息
      */
-    public void toClient(String message, JTextArea area) {
+    public void msgToClient(String message, JTextArea area) {
         // 判断是普通消息还是链接消息
         if (message.charAt(2) == 'c') {
             // 连接到服务端 --connect-server 127.0.0.1 9001 01其中01是客户端id
@@ -83,7 +76,7 @@ public class MsgHandler {
         try {
             String clientId = message.substring(29, 31);
             areas.put(clientId, area);
-            ContextUtils.getBean(Client.class).connect(message.substring(16, 25), clientId, Integer.valueOf(message.substring(25, 29)));
+            client.connect(message.substring(16, 25), clientId, Integer.valueOf(message.substring(25, 29)));
         } catch (IOException e) {
             log.error("=======客户端连接到服务端异常{}", e);
         }
@@ -99,17 +92,17 @@ public class MsgHandler {
         try {
             // 先判断是不是关闭连接消息
             if (message.charAt(2) == 'd') {
-                ContextUtils.getBean(Client.class).sendMsg(message.substring(19, 21), message);
+                client.sendMsgToServer(message.substring(19, 21), message);
             } else {
                 // 普通消息
                 String clientId = message.substring(21, 23);
                 if (message.length() > 73) {
                     // 如果消息超过50个字符分两次发送
-                    ContextUtils.getBean(Client.class).sendMsg(clientId, message.substring(23, 72));
+                    client.sendMsgToServer(clientId, message.substring(23, 72));
                     Thread.sleep(500);
-                    ContextUtils.getBean(Client.class).sendMsg(clientId, message.substring(73, message.length()));
+                    client.sendMsgToServer(clientId, message.substring(73, message.length()));
                 } else {
-                    ContextUtils.getBean(Client.class).sendMsg(clientId, message.substring(23, message.length()));
+                    client.sendMsgToServer(clientId, message.substring(23, message.length()));
                 }
 
             }
@@ -123,9 +116,9 @@ public class MsgHandler {
      *
      * @param message 群聊消息
      */
-    public void sendServerAll(String message) {
+    public void sendAllMsgToServer(String message) {
         try {
-            ContextUtils.getBean(Server.class).sendAll(message);
+            server.sendMsgToAll(message);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -136,9 +129,9 @@ public class MsgHandler {
      *
      * @param message 私聊消息内容
      */
-    public void sendServerSingle(String message) {
+    public void sendSingleMsgToServer(String message) {
         try {
-            ContextUtils.getBean(Server.class).sendSingle(message);
+            server.sendMsgToSingle(message);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -150,9 +143,9 @@ public class MsgHandler {
      *
      * @param msg 客户端返回给服务端信息
      */
-    public void clientMsg(StringBuilder msg) {
+    public void clientMsgToServerUi(StringBuilder msg) {
         String s = msg.toString();
-        ContextUtils.getBean(ServerMsgReceiver.class).clientMsgToUi(s);
+        serverMsgUi.clientMsgToUi(s);
     }
 
 
@@ -162,10 +155,10 @@ public class MsgHandler {
      *
      * @param msg 服务端返回客户端信息
      */
-    public void clientServerMsg(String msg) throws InterruptedException {
+    public void serverMsgToClientUi(String msg) throws InterruptedException {
         String s = "server:";
         String clientId = msg.substring(0, 2);
-        if (check(clientId)) {
+        if (checkClient(clientId)) {
             // 如果能根据客户端ID找到对应客户端则说明是私发功能，否则是群发消息
             JTextArea jTextArea = areas.get(clientId);
             jTextArea.append(s + msg);
@@ -183,10 +176,10 @@ public class MsgHandler {
     }
 
     /***
-     * 判断此信道是否在容器中存在，如果存在则返回ture，如果不存在则返回false
+     * 判断此客户端是否在容器中存在，如果存在则返回ture，如果不存在则返回false
      * @return
      */
-    public Boolean check(String clientId) {
+    public Boolean checkClient(String clientId) {
         Iterator<Map.Entry<String, JTextArea>> iterator = areas.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<String, JTextArea> entry = iterator.next();

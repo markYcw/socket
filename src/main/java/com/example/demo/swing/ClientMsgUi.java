@@ -1,5 +1,6 @@
 package com.example.demo.swing;
 
+import com.example.demo.utils.ContextUtils;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.swing.*;
@@ -12,7 +13,7 @@ import java.awt.event.ActionListener;
  * @date 2022/8/02 15:58
  */
 @Slf4j
-public class ClientMsgReceiver {
+public class ClientMsgUi {
 
     /**
      * 滚动面板
@@ -74,7 +75,7 @@ public class ClientMsgReceiver {
             @Override
             public void actionPerformed(ActionEvent e) {
                 String command = userCommand.getText();
-                toClient(command);
+                msgToClient(command);
             }
         });
         panel.add(sendButton);
@@ -98,8 +99,8 @@ public class ClientMsgReceiver {
      *
      * @param msg 要给服务端发送的消息
      */
-    public void toClient(String msg) {
-        MsgHandler.getInstance().toClient(msg, area);
+    public void msgToClient(String msg) {
+        ContextUtils.getBean(MsgHandler.class).msgToClient(msg, area);
     }
 
 }

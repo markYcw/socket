@@ -2,31 +2,38 @@
 
 package socket聊天后台{
 
-    class ServerMsgReceiver {
+    class ServerMsgUi {
         void clientMsgToUi();// 客户端放回的信息进行返显
         void toServer();// 收到命令下发消息后把消息转发给消息处理器
     }
 
     class MsgHandler {
-        void clientServerMsg();客户端返回消息给UI进行返显
-        void sendServerSingle();//私聊功能
+        void sendSingleMsgToServer();// 私聊功能
+        void serverMsgToClientUi();// 客户端返回消息给UI进行返显
+        void msgToServer();// 客户端给服务端发送消息
+        void clientMsgToServerUi// 客户端返回服务端信息进行返显
     }
 
     class Server {
-        void SendMsg(); //发送消息给客户端
+        void sendMsgToClient(); // 发送消息给客户端
     }
 
     class Client {
-        void SendMsg();//发送消息给服务端
-        void readMsg();//接收服务端消息
+        void sendMsg();// 发送消息给服务端
+        void readMsg();// 接收服务端消息
     }
 
-    class ClientMsgReceiver {
-        void toClient();//收到命令下发消息后把消息转发给消息处理器
+    class ClientMsgUi {
+        void msgToClient();// 收到命令下发消息后把消息转发给消息处理器
     }
-    ServerMsgReceiver"用户按下按钮把UI消息转发给MsgHandler" ..> MsgHandler
+    ServerMsgUi"用户按下按钮把UI消息转发给MsgHandler" ..> MsgHandler
     MsgHandler“消息处理：如判断是群发还是私聊消息，然后把消息转发给Server” ..> Server
     Client"客户端收到服务端消息后把消息转发给MsgHandler"..> MsgHandler
-    MsgHandler“消息处理交给客户端UI进行渲染”..> ClientMsgReceiver
+    MsgHandler“消息处理交给客户端UI进行渲染”..> ClientMsgUi
+    ClientMsgUi"用户按下按钮把UI消息转发给MsgHandler"..> MsgHandler
+    MsgHandler“消息处理：如判断是群发还是私聊消息，然后把消息转发给Client” ..> Client
+    Server"服务端收到客户端消息后把消息转发给MsgHandler"..> MsgHandler
+    MsgHandler“消息处理交给服务端UI进行渲染”..> ServerMsgUi
+
 }
 @enduml

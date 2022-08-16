@@ -1,7 +1,10 @@
 package com.example.demo.server;
 
 import com.example.demo.swing.MsgHandler;
+import com.example.demo.utils.ContextUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -71,7 +74,7 @@ public class Server {
      * @throws InterruptedException 中断异常
      * @param message 群聊消息
      */
-    public void sendAll(String message) throws InterruptedException {
+    public void sendMsgToAll(String message) throws InterruptedException {
         byte[] bytes = message.getBytes(StandardCharsets.UTF_8);
         Iterator<Map.Entry<String, Integer>> iterator = worker.getClients().entrySet().iterator();
         while (iterator.hasNext()) {
@@ -79,11 +82,11 @@ public class Server {
             Integer port = entry.getValue();
             SocketChannel socketChannel = worker.getSockets().get(port);
             if (bytes.length > 68) {
-                sendMsg(message.substring(17, 67), socketChannel);
+                sendMsgToClient(message.substring(17, 67), socketChannel);
                 Thread.sleep(5000);
-                sendMsg(message.substring(68, message.length()), socketChannel);
+                sendMsgToClient(message.substring(68, message.length()), socketChannel);
             } else {
-                sendMsg(message.substring(17, message.length()), socketChannel);
+                sendMsgToClient(message.substring(17, message.length()), socketChannel);
             }
         }
     }
@@ -93,7 +96,7 @@ public class Server {
      * @throws InterruptedException 中断异常
      * @param message 服务端给客户端私发消息是携带客户端id的(clientId+message)
      */
-    public void sendSingle(String message) throws InterruptedException {
+    public void sendMsgToSingle(String message) throws InterruptedException {
         byte[] bytes = message.getBytes(StandardCharsets.UTF_8);
         // 先提取客户ID
         String id = message.substring(11, 13);
@@ -103,11 +106,11 @@ public class Server {
         Integer port = worker.getClients().get(id);
         SocketChannel socketChannel = worker.getSockets().get(port);
         if (bytes.length > 63) {
-            sendMsg(message.substring(11, 62), socketChannel);
+            sendMsgToClient(message.substring(11, 62), socketChannel);
             Thread.sleep(500);
-            sendMsg(id + message.substring(62, message.length()), socketChannel);
+            sendMsgToClient(id + message.substring(62, message.length()), socketChannel);
         } else {
-            sendMsg(message.substring(11, message.length()), socketChannel);
+            sendMsgToClient(message.substring(11, message.length()), socketChannel);
         }
 
 
@@ -119,7 +122,7 @@ public class Server {
      * @param msg 消息正文
      * @param socketChannel 客户端信道
      */
-    public void sendMsg(String msg, SocketChannel socketChannel) {
+    public void sendMsgToClient(String msg, SocketChannel socketChannel) {
         buffer.clear();
         buffer.put(msg.getBytes(StandardCharsets.UTF_8));
         buffer.flip();
@@ -251,12 +254,13 @@ class Worker implements Runnable {
                 // 服务端需显示客户端连接、断开信息，如：“client1 has connected”、“client1 has disconnected”
                 StringBuilder m = new StringBuilder("");
                 m.append("client" + clientId + " has connected");
-                MsgHandler.getInstance().clientMsg(m);
+                log.info("========客户端登录"+m);
+                ContextUtils.getBean(MsgHandler.class).clientMsgToServerUi(m);
             }
         } else {
             // 如果不是登录消息则判断这个信道是否在容器里如果不在容器里说明他发的第一个消息不是登录消息则断开连接，如果在容器里则有两种情况
             // 第一种情况是个普通消息，则给ServerMsgReceiver返回。另一种情况这个消息是个主动断开连接消息--disconnect-server+clientId
-            if (check(port)) {
+            if (checkClient(port)) {
                 // 如果存在给ServerMsgReceiver返回
                 String clientId = getClientId(port);
                 StringBuilder message = new StringBuilder("");
@@ -278,7 +282,7 @@ class Worker implements Runnable {
                         byte b = source.get(j);
                         m.append((char) b);
                     }
-                    MsgHandler.getInstance().clientMsg(m);
+                    ContextUtils.getBean(MsgHandler.class).clientMsgToServerUi(m);
                 }
 
             } else {
@@ -293,7 +297,7 @@ class Worker implements Runnable {
      * clientPort 客户端端口
      * @return
      */
-    public Boolean check(Integer clientPort) throws IOException {
+    public Boolean checkClient(Integer clientPort) throws IOException {
         Iterator<Map.Entry<String, Integer>> iterator = clients.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<String, Integer> entry = iterator.next();
@@ -339,7 +343,7 @@ class Worker implements Runnable {
         StringBuilder m = new StringBuilder("");
         String clientId = getClientId(port);
         m.append("client" + clientId + " has disconnected");
-        MsgHandler.getInstance().clientMsg(m);
+        ContextUtils.getBean(MsgHandler.class).clientMsgToServerUi(m);
         Iterator<Map.Entry<String, Integer>> iterator = clients.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<String, Integer> entry = iterator.next();

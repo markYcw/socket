@@ -1,6 +1,7 @@
 package com.example.demo.client;
 
 import com.example.demo.swing.MsgHandler;
+import com.example.demo.utils.ContextUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
@@ -110,7 +111,7 @@ public class Client {
                          * SelectionKey.OP_READ    是否可读
                          *  SelectionKey.OP_WRITE  是否可写
                          */
-                        this.handleInput(key);
+                        this.handleServerInput(key);
                     }
                 }
             } catch (IOException e) {
@@ -125,7 +126,7 @@ public class Client {
      * @param key SelectionKey
      * @throws IOException IO异常
      */
-    private void handleInput(SelectionKey key) throws IOException {
+    private void handleServerInput(SelectionKey key) throws IOException {
 
         SocketChannel sc = (SocketChannel) key.channel();
         if (key.isConnectable()) { // 处于连接状态
@@ -151,7 +152,7 @@ public class Client {
             buffer.get(readByte);
             String s = new String(readByte);
             try {
-                MsgHandler.getInstance().clientServerMsg(s);
+                ContextUtils.getBean(MsgHandler.class).serverMsgToClientUi(s);
             } catch (InterruptedException e) {
                 log.error("=====客户端接收到服务端消息后将消息转发给MsgHandler出现异常{}", e);
             }
@@ -168,7 +169,7 @@ public class Client {
      * @param msg 要给服务端发送的信息
      * @throws IOException
      */
-    public void sendMsg(String clientId, String msg) throws IOException {
+    public void sendMsgToServer(String clientId, String msg) throws IOException {
         SocketChannel socketChannel = channels.get(clientId);
         if (!ObjectUtils.isEmpty(socketChannel)) {
             buffer.clear();
