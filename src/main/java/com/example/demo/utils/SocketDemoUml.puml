@@ -24,9 +24,9 @@ package socket聊天后台{
     class ClientMsgReceiver {
         void toClient();//收到命令下发消息后把消息转发给消息处理器
     }
-    ServerMsgReceiver"用户按下按钮把UI消息转发给MsgHandler" --> MsgHandler
-    MsgHandler“消息处理：如判断是群发还是私聊消息，然后把消息转发给Server” --> Server
-    Client"客户端收到服务端消息后把消息转发给MsgHandler"--> MsgHandler
-    MsgHandler“消息处理交给客户端UI进行渲染”--> ClientMsgReceiver
+    ServerMsgReceiver"用户按下按钮把UI消息转发给MsgHandler" ..> MsgHandler
+    MsgHandler“消息处理：如判断是群发还是私聊消息，然后把消息转发给Server” ..> Server
+    Client"客户端收到服务端消息后把消息转发给MsgHandler"..> MsgHandler
+    MsgHandler“消息处理交给客户端UI进行渲染”..> ClientMsgReceiver
 }
 @enduml
