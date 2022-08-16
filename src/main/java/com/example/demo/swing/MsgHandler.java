@@ -14,8 +14,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * @describe 消息处理转发类
  * @author mark
+ * @describe 消息处理转发类
  * @date 2022/7/29 15:18
  */
 @Slf4j
@@ -44,11 +44,13 @@ public class MsgHandler {
      * @param message 消息
      */
     public void dealMsg(String message) {
+        // 添加包首部信息
+        String msg = addPacketLength(message);
         // 判断是不是给全员发消息 --send-text-to-all第十三个字符是t为判断标准
         if (message.charAt(12) == 't') {
-            sendAllMsgToServer(message);
+            sendAllMsgToServer(msg);
         } else {
-            sendSingleMsgToServer(message);
+            sendSingleMsgToServer(msg);
         }
     }
 
@@ -58,13 +60,31 @@ public class MsgHandler {
      * @param message 消息 对于客户端总共有连接/普通聊天消息/关闭连接消息
      */
     public void msgToClient(String message, JTextArea area) {
+        // 添加包首部信息
+        String msg = addPacketLength(message);
         // 判断是普通消息还是链接消息
         if (message.charAt(2) == 'c') {
-            // 连接到服务端 --connect-server 127.0.0.1 9001 01其中01是客户端id
-            CompletableFuture.runAsync(() -> this.connectToServer(message, area));
+            // 连接到服务端 发送消息格式为+2位包数据长度信息加实际要发送的消息--connect-server 127.0.0.1 9001 01其中01是客户端id
+            CompletableFuture.runAsync(() -> this.connectToServer(msg, area)
+            );
         } else {
             // 发送消息给服务端 发送消息格式为命令+客户端id+消息内容
-            CompletableFuture.runAsync(() -> msgToServer(message));
+            CompletableFuture.runAsync(() -> msgToServer(msg));
+        }
+    }
+
+    /**
+     * 添加包首部信息：包长度 用2位表示数据包长度
+     *
+     * @param msg 需要添加的信息
+     * @return
+     */
+    private String addPacketLength(String msg) {
+        int length = msg.length();
+        if(length>10){
+            return String.valueOf(length) + msg;
+        }else {
+            return "0"+String.valueOf(length) + msg;
         }
     }
 
@@ -74,9 +94,9 @@ public class MsgHandler {
      */
     public void connectToServer(String message, JTextArea area) {
         try {
-            String clientId = message.substring(29, 31);
+            String clientId = message.substring(31, 33);
             areas.put(clientId, area);
-            client.connect(message.substring(16, 25), clientId, Integer.valueOf(message.substring(25, 29)));
+            client.connect(message.substring(18, 27), clientId, Integer.valueOf(message.substring(27, 31)));
         } catch (IOException e) {
             log.error("=======客户端连接到服务端异常{}", e);
         }
@@ -90,19 +110,24 @@ public class MsgHandler {
      */
     public void msgToServer(String message) {
         try {
+            //首先获取包长度信息
+            String msgLength = message.substring(0, 2);
             // 先判断是不是关闭连接消息
-            if (message.charAt(2) == 'd') {
-                client.sendMsgToServer(message.substring(19, 21), message);
+            if (message.charAt(4) == 'd') {
+                client.sendMsgToServer(message.substring(21, 23), message);
             } else {
                 // 普通消息
-                String clientId = message.substring(21, 23);
-                if (message.length() > 73) {
-                    // 如果消息超过50个字符分两次发送
-                    client.sendMsgToServer(clientId, message.substring(23, 72));
+                String clientId = message.substring(23, 25);
+                if (message.length() > 75) {
+                    // 如果消息超过50个字符分两次发送 发送消息格式为：消息长度+消息正文
+                    //提取消息正文
+                    client.sendMsgToServer(clientId, msgLength+message.substring(25, 74));
                     Thread.sleep(500);
-                    client.sendMsgToServer(clientId, message.substring(73, message.length()));
+                    //提取消息正文
+                    client.sendMsgToServer(clientId, msgLength+message.substring(75, message.length()));
                 } else {
-                    client.sendMsgToServer(clientId, message.substring(23, message.length()));
+                    //提取消息正文
+                    client.sendMsgToServer(clientId, msgLength+message.substring(25, message.length()));
                 }
 
             }
@@ -169,7 +194,7 @@ public class MsgHandler {
                 Map.Entry<String, JTextArea> entry = iterator.next();
                 JTextArea area = entry.getValue();
                 String m = s + msg;
-                area.append(s + m);
+                area.append(m);
             }
         }
 

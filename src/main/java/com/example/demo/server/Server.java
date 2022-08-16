@@ -3,9 +3,8 @@ package com.example.demo.server;
 import com.example.demo.swing.MsgHandler;
 import com.example.demo.utils.ContextUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -39,6 +38,7 @@ public class Server {
 
     /**
      * 开启服务端
+     *
      * @throws IOException IO异常
      */
     public void startServer() throws IOException {
@@ -71,46 +71,50 @@ public class Server {
 
     /**
      * 向全员发消息相当于群聊功能
+     *
+     * @param message 群聊消息 --send-text-to-all
      * @throws InterruptedException 中断异常
-     * @param message 群聊消息
      */
     public void sendMsgToAll(String message) throws InterruptedException {
+        String msgLength = message.substring(0, 2);
         byte[] bytes = message.getBytes(StandardCharsets.UTF_8);
         Iterator<Map.Entry<String, Integer>> iterator = worker.getClients().entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<String, Integer> entry = iterator.next();
             Integer port = entry.getValue();
             SocketChannel socketChannel = worker.getSockets().get(port);
-            if (bytes.length > 68) {
-                sendMsgToClient(message.substring(17, 67), socketChannel);
-                Thread.sleep(5000);
-                sendMsgToClient(message.substring(68, message.length()), socketChannel);
+            if (bytes.length > 70) {
+                sendMsgToClient(msgLength+message.substring(20, 69), socketChannel);
+                Thread.sleep(500);
+                sendMsgToClient(message.substring(70, message.length()), socketChannel);
             } else {
-                sendMsgToClient(message.substring(17, message.length()), socketChannel);
+                sendMsgToClient(msgLength+message.substring(20, message.length()), socketChannel);
             }
         }
     }
 
     /**
-     * 私聊功能 私聊功能--send-text两位字符作为客户端ID
-     * @throws InterruptedException 中断异常
+     * 私聊功能 私聊功能：消息长度+--send-text两位字符作为客户端ID
+     *
      * @param message 服务端给客户端私发消息是携带客户端id的(clientId+message)
+     * @throws InterruptedException 中断异常
      */
     public void sendMsgToSingle(String message) throws InterruptedException {
+        String msgLength = message.substring(0, 2);
         byte[] bytes = message.getBytes(StandardCharsets.UTF_8);
         // 先提取客户ID
-        String id = message.substring(11, 13);
+        String id = message.substring(13, 15);
         if (worker.getClients().get(id) == null) {
             return;
         }
         Integer port = worker.getClients().get(id);
         SocketChannel socketChannel = worker.getSockets().get(port);
-        if (bytes.length > 63) {
-            sendMsgToClient(message.substring(11, 62), socketChannel);
+        if (bytes.length > 67) {
+            sendMsgToClient(msgLength+message.substring(13, 64), socketChannel);
             Thread.sleep(500);
-            sendMsgToClient(id + message.substring(62, message.length()), socketChannel);
+            sendMsgToClient(msgLength+id + message.substring(64, message.length()), socketChannel);
         } else {
-            sendMsgToClient(message.substring(11, message.length()), socketChannel);
+            sendMsgToClient(msgLength+message.substring(13, message.length()), socketChannel);
         }
 
 
@@ -119,7 +123,7 @@ public class Server {
     /**
      * 发送消息给客户端
      *
-     * @param msg 消息正文
+     * @param msg           消息正文
      * @param socketChannel 客户端信道
      */
     public void sendMsgToClient(String msg, SocketChannel socketChannel) {
@@ -157,6 +161,12 @@ class Worker implements Runnable {
     private ConcurrentHashMap<Integer, SelectionKey> keys = new ConcurrentHashMap<>();
 
     /**
+     * 此容器用于保存客户端给服务端发超过50个字符的消息
+     * key是消息长度，value是消息
+     */
+    private ConcurrentHashMap<Integer, String> msgPool = new ConcurrentHashMap<>();
+
+    /**
      * 用于启动worker
      */
     private Thread thread;
@@ -184,6 +194,7 @@ class Worker implements Runnable {
 
     /**
      * 获取客户端map
+     *
      * @return
      */
     public ConcurrentHashMap<String, Integer> getClients() {
@@ -192,14 +203,17 @@ class Worker implements Runnable {
 
     /**
      * 获取信道map
+     *
      * @return
      */
     public ConcurrentHashMap<Integer, SocketChannel> getSockets() {
         return sockets;
     }
 
+
     /**
      * 注册读写事件
+     *
      * @param sc SocketChannel
      * @throws IOException IO异常
      */
@@ -216,9 +230,10 @@ class Worker implements Runnable {
 
     /**
      * 读取客户端消息 客户端第一个消息格式必须是登录消息，消息格式为：login+客户端ID，维护端ID为2位
-     * @throws IOException IO异常
+     *
      * @param source 用来读取消息的buffer
      * @param key    SelectionKey
+     * @throws IOException IO异常
      */
     public void readMsg(ByteBuffer source, SelectionKey key, SocketChannel channel) throws IOException {
         source.flip();
@@ -232,6 +247,7 @@ class Worker implements Runnable {
         InetSocketAddress address = (InetSocketAddress) channel.getRemoteAddress();
         int port = address.getPort();
         if (msg.equals("login")) {
+            // 如果是登录消息则无需判断消息长度因为登录消息不会大于50个字符--connect-server127.0.0.1999801
             // 如果是登录消息判断是不是第一次登录消息，如果不是第一次登录根据这个ID肯定是在容器里能找到信道，则断开连接
             // 获取客户端ID
             String clientId = s.substring(5, 7);
@@ -254,22 +270,24 @@ class Worker implements Runnable {
                 // 服务端需显示客户端连接、断开信息，如：“client1 has connected”、“client1 has disconnected”
                 StringBuilder m = new StringBuilder("");
                 m.append("client" + clientId + " has connected");
-                log.info("========客户端登录"+m);
+                log.info("========客户端登录" + m);
                 ContextUtils.getBean(MsgHandler.class).clientMsgToServerUi(m);
             }
         } else {
+            // 如果不是登录消息首先获取此次消息长度判断是否大于50个字符，如果小于50则立即给服务端UI进行返显，否则需要等消息全部收完再进行返显
             // 如果不是登录消息则判断这个信道是否在容器里如果不在容器里说明他发的第一个消息不是登录消息则断开连接，如果在容器里则有两种情况
             // 第一种情况是个普通消息，则给ServerMsgReceiver返回。另一种情况这个消息是个主动断开连接消息--disconnect-server+clientId
+            Integer msgLength = Integer.valueOf(s.substring(0, 2));
             if (checkClient(port)) {
                 // 如果存在给ServerMsgReceiver返回
                 String clientId = getClientId(port);
                 StringBuilder message = new StringBuilder("");
                 source.rewind();
-                for (int k = 0; k < 3; k++) {
+                for (int k = 0; k < 5; k++) {
                     byte b = source.get(k);
                     message.append((char) b);
                 }
-                if (message.charAt(2) == 'd') {
+                if (message.charAt(4) == 'd') {
                     // 如果是断开客户端连接就是断开相应的客户端连接
                     offLine(channel);
                 } else {
@@ -277,12 +295,29 @@ class Worker implements Runnable {
                     source.rewind();
                     // 要给ui进行返显的消息
                     StringBuilder m = new StringBuilder("");
-                    m.append(clientId + ":");
                     for (int j = 0; j < source.limit(); j++) {
                         byte b = source.get(j);
                         m.append((char) b);
                     }
-                    ContextUtils.getBean(MsgHandler.class).clientMsgToServerUi(m);
+                     // 消息加上客户端ID
+                     String id = clientId + ":";
+                    // 判断消息长度判断是否大于50个字符，如果小于50则立即给服务端UI进行返显，否则需要等消息全部收完再进行返显
+                    if (msgLength > 50) {
+                        String mes = msgPool.get(msgLength);
+                        if (StringUtils.isEmpty(mes)) {
+                            msgPool.put(msgLength, m.substring(2));
+                        } else {
+                            String tolMsg = mes + m.substring(2);
+                            StringBuilder totalMsg = new StringBuilder(id+tolMsg);
+                            ContextUtils.getBean(MsgHandler.class).clientMsgToServerUi(totalMsg);
+                            //消费完消息去除消息池里面内容
+                            msgPool.remove(msgLength);
+                        }
+                    }else {
+                        //如果小于50个字符则直接进行返显
+                        StringBuilder str = new StringBuilder(id+m.substring(2));
+                        ContextUtils.getBean(MsgHandler.class).clientMsgToServerUi(str);
+                    }
                 }
 
             } else {
