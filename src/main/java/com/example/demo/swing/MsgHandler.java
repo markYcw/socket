@@ -29,7 +29,7 @@ public class MsgHandler {
     private Server server;
 
     @Resource
-    private ServerMsgUi serverMsgUi;
+    private ChatServerUi chatServerUi;
 
 
     /**
@@ -170,7 +170,7 @@ public class MsgHandler {
      */
     public void clientMsgToServerUi(StringBuilder msg) {
         String s = msg.toString();
-        serverMsgUi.clientMsgToUi(s);
+        chatServerUi.clientMsgToUi(s);
     }
 
 

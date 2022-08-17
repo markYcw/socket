@@ -1,8 +1,7 @@
 package com.example.demo.swing;
 
-import ch.qos.logback.core.util.ContextUtil;
 import com.example.demo.utils.ContextUtils;
-import org.springframework.stereotype.Component;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.swing.*;
 import java.awt.event.ActionEvent;
@@ -10,11 +9,11 @@ import java.awt.event.ActionListener;
 
 /**
  * @author mark
- * @describe 服务端消息下发接收器
- * @date 2022/7/29 15:58
+ * @describe 客户端消息下发接收器
+ * @date 2022/8/02 15:58
  */
-@Component
-public class ServerMsgUi {
+@Slf4j
+public class ChatClientUi {
 
     /**
      * 滚动面板
@@ -32,11 +31,11 @@ public class ServerMsgUi {
     private JFrame frame;
 
     public void init() {
-        // 创建 JFrame 实例
-        frame = new JFrame("server");
-        // Setting the width and height of frame
+        // 创建JFrame实例
+        frame = new JFrame("client");
+        // 设置frame的宽高
         frame.setSize(500, 500);
-        // 创建面板，这个类似于 HTML 的 div 标签 我们可以创建多个面板并在 JFrame 中指定位置  面板中我们可以添加文本字段，按钮及其他组件。
+        // 创建面板，这个类似于HTML的div标签我们可以创建多个面板并在JFrame中指定位置面板中我们可以添加文本字段，按钮及其他组件。
         JPanel panel = new JPanel();
         // 添加面板
         frame.add(panel);
@@ -49,7 +48,7 @@ public class ServerMsgUi {
     }
 
     /**
-     * 将组件添加到面板
+     * 布局面板
      *
      * @param panel 面板
      */
@@ -65,7 +64,7 @@ public class ServerMsgUi {
         panel.add(userLabel);
 
         // 创建文本域用于用户输入命令
-        JTextField userCommand = new JTextField(100);
+        JTextField userCommand = new JTextField(20);
         userCommand.setBounds(100, 20, 350, 25);
         panel.add(userCommand);
 
@@ -76,7 +75,7 @@ public class ServerMsgUi {
             @Override
             public void actionPerformed(ActionEvent e) {
                 String command = userCommand.getText();
-                toServer(command);
+                msgToClient(command);
             }
         });
         panel.add(sendButton);
@@ -93,25 +92,15 @@ public class ServerMsgUi {
         jScrollPaneComponent = new JScrollPane(area);
         jScrollPaneComponent.setBounds(30, 100, 422, 290);
         panel.add(jScrollPaneComponent);
-
-    }
-
-    /**
-     * 客户端返回的信息进行返显
-     *
-     * @param msg 客户端返回给的信息
-     */
-    public void clientMsgToUi(String msg) {
-        area.append(msg);
     }
 
     /**
      * 收到命令下发消息后把消息转发给消息处理器进行处理
      *
-     * @param msg 给服务端下发的信息内容
+     * @param msg 要给服务端发送的消息
      */
-    public void toServer(String msg) {
-        ContextUtils.getBean(MsgHandler.class).dealMsg(msg);
+    public void msgToClient(String msg) {
+        ContextUtils.getBean(MsgHandler.class).msgToClient(msg, area);
     }
 
 }

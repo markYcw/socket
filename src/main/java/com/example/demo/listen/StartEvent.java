@@ -1,8 +1,8 @@
 package com.example.demo.listen;
 
 import com.example.demo.server.Server;
-import com.example.demo.swing.ClientMsgUi;
-import com.example.demo.swing.ServerMsgUi;
+import com.example.demo.swing.ChatClientUi;
+import com.example.demo.swing.ChatServerUi;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
@@ -22,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
 public class StartEvent implements CommandLineRunner {
 
     @Resource
-    private ServerMsgUi serverMsgUi;
+    private ChatServerUi chatServerUi;
 
     @Resource
     private Server server;
@@ -38,14 +38,14 @@ public class StartEvent implements CommandLineRunner {
             }
         });
         //服务端信息收集器初始化
-        serverMsgUi.init();
+        chatServerUi.init();
 
         //客户端信息收集器初始化
-        ClientMsgUi receiver = new ClientMsgUi();
-        ClientMsgUi clientMsgUi = new ClientMsgUi();
+        ChatClientUi receiver = new ChatClientUi();
+        ChatClientUi chatClientUi = new ChatClientUi();
         CompletableFuture.runAsync(() -> {
             receiver.init();
-            clientMsgUi.init();
+            chatClientUi.init();
         });
 
 
