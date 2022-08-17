@@ -27,12 +27,11 @@ package socket聊天后台{
     class ChatClientUi {
         void msgToClient();// 收到命令下发消息后把消息转发给消息处理器
     }
-    ChatServerUi ..> MsgHandler
-    MsgHandler ..> Server
+    ChatServerUi --> MsgHandler
+    MsgHandler --> Server
     Client..> MsgHandler
-    MsgHandler..> ChatClientUi
-    ChatClientUi..> MsgHandler
-    MsgHandler ..> Client
+    ChatClientUi--> MsgHandler
+    MsgHandler --> Client
     Server..> MsgHandler
     MsgHandler..> ChatServerUi
 
