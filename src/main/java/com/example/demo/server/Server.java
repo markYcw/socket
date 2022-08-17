@@ -84,11 +84,11 @@ public class Server {
             Integer port = entry.getValue();
             SocketChannel socketChannel = worker.getSockets().get(port);
             if (bytes.length > 70) {
-                sendMsgToClient(msgLength+message.substring(20, 69), socketChannel);
+                sendMsgToClient(msgLength + message.substring(20, 69), socketChannel);
                 Thread.sleep(500);
                 sendMsgToClient(message.substring(70, message.length()), socketChannel);
             } else {
-                sendMsgToClient(msgLength+message.substring(20, message.length()), socketChannel);
+                sendMsgToClient(msgLength + message.substring(20, message.length()), socketChannel);
             }
         }
     }
@@ -110,11 +110,11 @@ public class Server {
         Integer port = worker.getClients().get(id);
         SocketChannel socketChannel = worker.getSockets().get(port);
         if (bytes.length > 67) {
-            sendMsgToClient(msgLength+message.substring(13, 64), socketChannel);
+            sendMsgToClient(msgLength + message.substring(13, 64), socketChannel);
             Thread.sleep(500);
-            sendMsgToClient(msgLength+id + message.substring(64, message.length()), socketChannel);
+            sendMsgToClient(msgLength + id + message.substring(64, message.length()), socketChannel);
         } else {
-            sendMsgToClient(msgLength+message.substring(13, message.length()), socketChannel);
+            sendMsgToClient(msgLength + message.substring(13, message.length()), socketChannel);
         }
 
 
@@ -299,8 +299,8 @@ class Worker implements Runnable {
                         byte b = source.get(j);
                         m.append((char) b);
                     }
-                     // 消息加上客户端ID
-                     String id = clientId + ":";
+                    // 消息加上客户端ID
+                    String id = clientId + ":";
                     // 判断消息长度判断是否大于50个字符，如果小于50则立即给服务端UI进行返显，否则需要等消息全部收完再进行返显
                     if (msgLength > 50) {
                         String mes = msgPool.get(msgLength);
@@ -308,14 +308,14 @@ class Worker implements Runnable {
                             msgPool.put(msgLength, m.substring(2));
                         } else {
                             String tolMsg = mes + m.substring(2);
-                            StringBuilder totalMsg = new StringBuilder(id+tolMsg);
+                            StringBuilder totalMsg = new StringBuilder(id + tolMsg);
                             ContextUtils.getBean(MsgHandler.class).clientMsgToServerUi(totalMsg);
                             //消费完消息去除消息池里面内容
                             msgPool.remove(msgLength);
                         }
-                    }else {
+                    } else {
                         //如果小于50个字符则直接进行返显
-                        StringBuilder str = new StringBuilder(id+m.substring(2));
+                        StringBuilder str = new StringBuilder(id + m.substring(2));
                         ContextUtils.getBean(MsgHandler.class).clientMsgToServerUi(str);
                     }
                 }

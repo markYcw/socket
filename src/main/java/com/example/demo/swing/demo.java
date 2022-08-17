@@ -7,8 +7,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 /**
- * @describe SWING测试demo
  * @author mark
+ * @describe SWING测试demo
  * @date 2022/7/29 16:22
  */
 @Data
@@ -62,14 +62,14 @@ public class demo {
          * setBounds(x, y, width, height)
          * x 和 y 指定左上角的新位置，由 width 和 height 指定新的大小。
          */
-        userLabel.setBounds(10,20,80,25);
+        userLabel.setBounds(10, 20, 80, 25);
         panel.add(userLabel);
 
         /*
          * 创建文本域用于用户输入
          */
         JTextField userCommand = new JTextField(20);
-        userCommand.setBounds(100,20,165,25);
+        userCommand.setBounds(100, 20, 165, 25);
         panel.add(userCommand);
 
         // 发送按钮
@@ -79,7 +79,7 @@ public class demo {
             @Override
             public void actionPerformed(ActionEvent e) {
                 String command = userCommand.getText();
-                System.out.println("=======收到命令"+command);
+                System.out.println("=======收到命令" + command);
             }
         });
         panel.add(sendButton);
@@ -88,7 +88,7 @@ public class demo {
          * 用于返显服务端回馈的内容
          */
         JTextArea jTextArea = new JTextArea();
-        jTextArea.setBounds(100,50,605,250);
+        jTextArea.setBounds(100, 50, 605, 250);
         jTextArea.setText("helloshsshdsadhahdlasshdisahdisaadiasihdaibcssjbcufudufbcssg");
         panel.add(jTextArea);
 

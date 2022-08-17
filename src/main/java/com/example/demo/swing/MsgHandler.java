@@ -81,10 +81,10 @@ public class MsgHandler {
      */
     private String addPacketLength(String msg) {
         int length = msg.length();
-        if(length>10){
+        if (length > 10) {
             return String.valueOf(length) + msg;
-        }else {
-            return "0"+String.valueOf(length) + msg;
+        } else {
+            return "0" + String.valueOf(length) + msg;
         }
     }
 
@@ -121,13 +121,13 @@ public class MsgHandler {
                 if (message.length() > 75) {
                     // 如果消息超过50个字符分两次发送 发送消息格式为：消息长度+消息正文
                     //提取消息正文
-                    client.sendMsgToServer(clientId, msgLength+message.substring(25, 74));
+                    client.sendMsgToServer(clientId, msgLength + message.substring(25, 74));
                     Thread.sleep(500);
                     //提取消息正文
-                    client.sendMsgToServer(clientId, msgLength+message.substring(75, message.length()));
+                    client.sendMsgToServer(clientId, msgLength + message.substring(75, message.length()));
                 } else {
                     //提取消息正文
-                    client.sendMsgToServer(clientId, msgLength+message.substring(25, message.length()));
+                    client.sendMsgToServer(clientId, msgLength + message.substring(25, message.length()));
                 }
 
             }
