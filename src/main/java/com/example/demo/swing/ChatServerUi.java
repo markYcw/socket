@@ -100,7 +100,7 @@ public class ChatServerUi {
      * @param msg 客户端返回给的信息
      */
     public void clientMsgToUi(String msg) {
-        area.append(msg);
+        area.append(msg+"\n");
     }
 
     /**

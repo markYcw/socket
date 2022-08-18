@@ -186,7 +186,7 @@ public class MsgHandler {
         if (checkClient(clientId)) {
             // 如果能根据客户端ID找到对应客户端则说明是私发功能，否则是群发消息
             JTextArea jTextArea = areas.get(clientId);
-            jTextArea.append(s + msg);
+            jTextArea.append(s + msg+"\n");
         } else {
             // 群发消息
             Iterator<Map.Entry<String, JTextArea>> iterator = areas.entrySet().iterator();
@@ -194,7 +194,7 @@ public class MsgHandler {
                 Map.Entry<String, JTextArea> entry = iterator.next();
                 JTextArea area = entry.getValue();
                 String m = s + msg;
-                area.append(m);
+                area.append(m+"\n");
             }
         }
 
