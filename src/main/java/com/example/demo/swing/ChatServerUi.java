@@ -1,6 +1,4 @@
 package com.example.demo.swing;
-
-import ch.qos.logback.core.util.ContextUtil;
 import com.example.demo.utils.ContextUtils;
 import org.springframework.stereotype.Component;
 
@@ -110,7 +108,7 @@ public class ChatServerUi {
      *
      * @param msg 给服务端下发的信息内容
      */
-    public void toServer(String msg) {
+    private void toServer(String msg) {
         ContextUtils.getBean(MsgHandler.class).dealMsg(msg);
     }
 

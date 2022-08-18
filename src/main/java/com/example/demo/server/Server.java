@@ -126,7 +126,7 @@ public class Server {
      * @param msg           消息正文
      * @param socketChannel 客户端信道
      */
-    public void sendMsgToClient(String msg, SocketChannel socketChannel) {
+    private void sendMsgToClient(String msg, SocketChannel socketChannel) {
         buffer.clear();
         buffer.put(msg.getBytes(StandardCharsets.UTF_8));
         buffer.flip();
@@ -235,7 +235,7 @@ class Worker implements Runnable {
      * @param key    SelectionKey
      * @throws IOException IO异常
      */
-    public void readMsg(ByteBuffer source, SelectionKey key, SocketChannel channel) throws IOException {
+    private void readMsg(ByteBuffer source, SelectionKey key, SocketChannel channel) throws IOException {
         source.flip();
         // 判断是否登录消息，如果第一个不是登录消息则断开与客户端连接
         // 读取readBuf数据 然后打印数据
@@ -332,7 +332,7 @@ class Worker implements Runnable {
      * clientPort 客户端端口
      * @return
      */
-    public Boolean checkClient(Integer clientPort) throws IOException {
+    private Boolean checkClient(Integer clientPort) throws IOException {
         Iterator<Map.Entry<String, Integer>> iterator = clients.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<String, Integer> entry = iterator.next();

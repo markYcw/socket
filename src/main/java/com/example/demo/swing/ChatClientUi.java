@@ -99,7 +99,7 @@ public class ChatClientUi {
      *
      * @param msg 要给服务端发送的消息
      */
-    public void msgToClient(String msg) {
+    private void msgToClient(String msg) {
         ContextUtils.getBean(MsgHandler.class).msgToClient(msg, area);
     }
 

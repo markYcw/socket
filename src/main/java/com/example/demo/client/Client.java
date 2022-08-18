@@ -92,7 +92,7 @@ public class Client {
      * @param socketChannel 信道
      * @throws IOException IO异常
      */
-    public void register(SocketChannel socketChannel) throws IOException {
+    private void register(SocketChannel socketChannel) throws IOException {
         // 打开多路复用器
         selector = Selector.open();
         socketChannel.register(selector, SelectionKey.OP_READ);
@@ -102,7 +102,7 @@ public class Client {
     /**
      * 多路复用部分。当select检测到有可读事件则读取服务端所发来的信息
      */
-    public void readMsg() {
+    private void readMsg() {
         while (true) {
             try {
                 selector.select();

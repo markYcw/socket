@@ -204,7 +204,7 @@ public class MsgHandler {
      * 判断此客户端是否在容器中存在，如果存在则返回ture，如果不存在则返回false
      * @return
      */
-    public Boolean checkClient(String clientId) {
+    private Boolean checkClient(String clientId) {
         Iterator<Map.Entry<String, JTextArea>> iterator = areas.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<String, JTextArea> entry = iterator.next();
