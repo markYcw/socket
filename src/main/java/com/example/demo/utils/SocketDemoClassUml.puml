@@ -3,7 +3,7 @@
 package socket聊天后台{
 
     class ChatServerUi {
-        void clientMsgToUi();// 客户端放回的信息进行返显
+        void clientMsgToUi();// 客户端返回的信息进行返显
         void msgToServer();// 收到命令下发消息后把消息转发给消息处理器
     }
 
@@ -27,6 +27,7 @@ package socket聊天后台{
     }
 
     class ChatClientUi {
+        void serverMsgToUi();// 服务端返回的信息进行返显
         void msgToClient();// 收到命令下发消息后把消息转发给消息处理器
     }
     ChatServerUi ..> MsgHandler
@@ -36,6 +37,7 @@ package socket聊天后台{
     MsgHandler --> Client
     Server..> MsgHandler
     MsgHandler--> ChatServerUi
+    MsgHandler--> ChatClientUi
 
 }
 @enduml

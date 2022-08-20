@@ -351,7 +351,7 @@ class Worker implements Runnable {
      * @return
      * @throws IOException
      */
-    public String getClientId(Integer clientPort) throws IOException {
+    private String getClientId(Integer clientPort) throws IOException {
         Iterator<Map.Entry<String, Integer>> iterator = clients.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<String, Integer> entry = iterator.next();
@@ -368,7 +368,7 @@ class Worker implements Runnable {
      *
      * @param socketChannel 要下线的信道
      */
-    public void offLine(SocketChannel socketChannel) throws IOException {
+    private void offLine(SocketChannel socketChannel) throws IOException {
         InetSocketAddress address = (InetSocketAddress) socketChannel.getRemoteAddress();
         Integer port = address.getPort();
         SelectionKey key = keys.get(port);

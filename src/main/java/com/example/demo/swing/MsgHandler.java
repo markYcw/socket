@@ -6,7 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
-import javax.swing.*;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
@@ -36,7 +35,7 @@ public class MsgHandler {
      * 用于对客户端UI进行信息返显
      * key是客户端ID，value是进行返显的对象
      */
-    private ConcurrentHashMap<String, JTextArea> areas = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<String, ChatClientUi> chatUis = new ConcurrentHashMap<>();
 
     /**
      * 处理消息后把消息转发给服务端
@@ -59,14 +58,16 @@ public class MsgHandler {
      *
      * @param message 消息 对于客户端总共有连接/普通聊天消息/关闭连接消息
      */
-    public void msgToClient(String message, JTextArea area) {
+    public void msgToClient(String message, ChatClientUi ui) {
         // 添加包首部信息
         String msg = addPacketLength(message);
         // 判断是普通消息还是链接消息
         if (message.charAt(2) == 'c') {
+            String clientId = message.substring(31, 33);
             // 连接到服务端 发送消息格式为+2位包数据长度信息加实际要发送的消息--connect-server 127.0.0.1 9001 01其中01是客户端id
-            CompletableFuture.runAsync(() -> this.connectToServer(msg, area)
+            CompletableFuture.runAsync(() -> this.connectToServer(msg,clientId)
             );
+            chatUis.put(clientId, ui);
         } else {
             // 发送消息给服务端 发送消息格式为命令+客户端id+消息内容
             CompletableFuture.runAsync(() -> msgToServer(msg));
@@ -92,10 +93,8 @@ public class MsgHandler {
      * 客户端发起连接请求连接服务端
      * @param message 链接客户端的消息
      */
-    public void connectToServer(String message, JTextArea area) {
+    public void connectToServer(String message,String clientId) {
         try {
-            String clientId = message.substring(31, 33);
-            areas.put(clientId, area);
             client.connect(message.substring(18, 27), clientId, Integer.valueOf(message.substring(27, 31)));
         } catch (IOException e) {
             log.error("=======客户端连接到服务端异常{}", e);
@@ -108,7 +107,7 @@ public class MsgHandler {
      *
      * @param message 客户端给服务端发送消息
      */
-    public void msgToServer(String message) {
+    private void msgToServer(String message) {
         try {
             //首先获取包长度信息
             String msgLength = message.substring(0, 2);
@@ -181,20 +180,18 @@ public class MsgHandler {
      * @param msg 服务端返回客户端信息
      */
     public void serverMsgToClientUi(String msg) throws InterruptedException {
-        String s = "server:";
         String clientId = msg.substring(0, 2);
         if (checkClient(clientId)) {
             // 如果能根据客户端ID找到对应客户端则说明是私发功能，否则是群发消息
-            JTextArea jTextArea = areas.get(clientId);
-            jTextArea.append(s + msg+"\n");
+            ChatClientUi ui  = chatUis.get(clientId);
+            ui.serverMsgToUi(msg);
         } else {
             // 群发消息
-            Iterator<Map.Entry<String, JTextArea>> iterator = areas.entrySet().iterator();
+            Iterator<Map.Entry<String, ChatClientUi>> iterator = chatUis.entrySet().iterator();
             while (iterator.hasNext()) {
-                Map.Entry<String, JTextArea> entry = iterator.next();
-                JTextArea area = entry.getValue();
-                String m = s + msg;
-                area.append(m+"\n");
+                Map.Entry<String, ChatClientUi> entry = iterator.next();
+                ChatClientUi ui = entry.getValue();
+                ui.serverMsgToUi(msg);
             }
         }
 
@@ -205,9 +202,9 @@ public class MsgHandler {
      * @return
      */
     private Boolean checkClient(String clientId) {
-        Iterator<Map.Entry<String, JTextArea>> iterator = areas.entrySet().iterator();
+        Iterator<Map.Entry<String, ChatClientUi>> iterator = chatUis.entrySet().iterator();
         while (iterator.hasNext()) {
-            Map.Entry<String, JTextArea> entry = iterator.next();
+            Map.Entry<String, ChatClientUi> entry = iterator.next();
             String id = entry.getKey();
             if (id.equals(clientId)) {
                 return true;

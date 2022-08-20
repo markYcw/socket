@@ -94,13 +94,17 @@ public class ChatClientUi {
         panel.add(jScrollPaneComponent);
     }
 
+    public void serverMsgToUi(String msg){
+        this.area.append("server:"+msg+"\n");
+    }
+
     /**
      * 收到命令下发消息后把消息转发给消息处理器进行处理
      *
      * @param msg 要给服务端发送的消息
      */
     private void msgToClient(String msg) {
-        ContextUtils.getBean(MsgHandler.class).msgToClient(msg, area);
+        ContextUtils.getBean(MsgHandler.class).msgToClient(msg, this);
     }
 
 }
