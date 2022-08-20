@@ -4,14 +4,16 @@ package socket聊天后台{
 
     class ChatServerUi {
         void clientMsgToUi();// 客户端放回的信息进行返显
-        void toServer();// 收到命令下发消息后把消息转发给消息处理器
+        void msgToServer();// 收到命令下发消息后把消息转发给消息处理器
     }
 
     class MsgHandler {
         void sendSingleMsgToServer();// 私聊功能
+        void sendAllMsgToServer();// 群发功能
+        void clientMsgToServerUi();// 客户端返回服务端信息进行返显
         void serverMsgToClientUi();// 客户端返回消息给UI进行返显
         void msgToServer();// 客户端给服务端发送消息
-        void clientMsgToServerUi// 客户端返回服务端信息进行返显
+
     }
 
     class Server {
@@ -27,13 +29,13 @@ package socket聊天后台{
     class ChatClientUi {
         void msgToClient();// 收到命令下发消息后把消息转发给消息处理器
     }
-    ChatServerUi --> MsgHandler
+    ChatServerUi ..> MsgHandler
     MsgHandler --> Server
     Client..> MsgHandler
-    ChatClientUi--> MsgHandler
+    ChatClientUi..> MsgHandler
     MsgHandler --> Client
     Server..> MsgHandler
-    MsgHandler..> ChatServerUi
+    MsgHandler--> ChatServerUi
 
 }
 @enduml

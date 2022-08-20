@@ -74,7 +74,7 @@ public class ChatServerUi {
             @Override
             public void actionPerformed(ActionEvent e) {
                 String command = userCommand.getText();
-                toServer(command);
+                msgToServer(command);
             }
         });
         panel.add(sendButton);
@@ -108,7 +108,7 @@ public class ChatServerUi {
      *
      * @param msg 给服务端下发的信息内容
      */
-    private void toServer(String msg) {
+    private void msgToServer(String msg) {
         ContextUtils.getBean(MsgHandler.class).dealMsg(msg);
     }
 
