@@ -62,7 +62,8 @@ public class Server {
                     log.info("===connected...{}", sc.getRemoteAddress());
                     // 2关联selector
                     log.info("=====beforeRegister{}", sc.getRemoteAddress());
-                    worker.register(sc); //boss调用 初始化worker的selector 启动线程
+                    //boss调用 初始化worker的selector 启动线程
+                    worker.register(sc);
                     log.info("====afterRegister{}", sc.getRemoteAddress());
                 }
             }
@@ -224,7 +225,8 @@ class Worker implements Runnable {
             thread.start();
             start = true;
         }
-        selector.wakeup();// 唤醒selector
+        // 唤醒selector
+        selector.wakeup();
         sc.register(selector, SelectionKey.OP_READ);
     }
 
@@ -406,7 +408,8 @@ class Worker implements Runnable {
                     if ((key.isReadable())) {
                         try {
                             SocketChannel channel = (SocketChannel) key.channel();
-                            int read = channel.read(buffer); // 如果客户端是正常断开的话，read方法的返回值是-1
+                            // 如果客户端是正常断开的话，read方法的返回值是-1
+                            int read = channel.read(buffer);
                             if (read == -1) {
                                 key.cancel();
                                 // 从client中移除下线的客户端
@@ -417,6 +420,7 @@ class Worker implements Runnable {
                         } catch (IOException e) {
                             e.printStackTrace();
                             // 如果客户端被强制关闭那么把key从selectedKey集合中移除
+                            key.cancel();
                         }
                     }
                 }

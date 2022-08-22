@@ -139,8 +139,10 @@ public class Client {
     private void handleServerInput(SelectionKey key) throws IOException {
 
         SocketChannel sc = (SocketChannel) key.channel();
-        if (key.isConnectable()) { // 处于连接状态
-            if (sc.finishConnect()) {// 客户端连接成功
+        // 处于连接状态
+        if (key.isConnectable()) {
+            // 客户端连接成功
+            if (sc.finishConnect()) {
                 // 注册到selector为 可读状态
                 sc.register(selector, SelectionKey.OP_READ);
                 byte[] requestBytes = "客户端发送数据.".getBytes();
@@ -153,7 +155,8 @@ public class Client {
             }
         }
 
-        if (key.isReadable()) {//如果客户端接收到了服务器端发送的应答消息 则SocketChannel是可读的
+        //如果客户端接收到了服务器端发送的应答消息 则SocketChannel是可读的
+        if (key.isReadable()) {
             // 读取服务端数据
             buffer.clear();
             int read = sc.read(buffer);
