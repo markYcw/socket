@@ -77,45 +77,41 @@ public class Server {
      * @throws InterruptedException 中断异常
      */
     public void sendMsgToAll(String message) throws InterruptedException {
-        String msgLength = message.substring(0, 2);
         byte[] bytes = message.getBytes(StandardCharsets.UTF_8);
         Iterator<Map.Entry<String, Integer>> iterator = worker.getClients().entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<String, Integer> entry = iterator.next();
             Integer port = entry.getValue();
             SocketChannel socketChannel = worker.getSockets().get(port);
-            if (bytes.length > 70) {
-                sendMsgToClient(msgLength + message.substring(20, 69), socketChannel);
-                Thread.sleep(500);
-                sendMsgToClient(message.substring(70, message.length()), socketChannel);
+            if (bytes.length > 68) {
+                sendMsgToClient(message.substring(18, 67), socketChannel);
+                sendMsgToClient(message.substring(68, message.length()), socketChannel);
             } else {
-                sendMsgToClient(msgLength + message.substring(20, message.length()), socketChannel);
+                sendMsgToClient(message.substring(18, message.length()), socketChannel);
             }
         }
     }
 
     /**
-     * 私聊功能 私聊功能：消息长度+--send-text两位字符作为客户端ID
+     * 私聊功能 私聊功能：--send-text两位字符作为客户端ID
      *
      * @param message 服务端给客户端私发消息是携带客户端id的(clientId+message)
      * @throws InterruptedException 中断异常
      */
     public void sendMsgToSingle(String message) throws InterruptedException {
-        String msgLength = message.substring(0, 2);
         byte[] bytes = message.getBytes(StandardCharsets.UTF_8);
         // 先提取客户ID
-        String id = message.substring(13, 15);
+        String id = message.substring(11, 13);
         if (worker.getClients().get(id) == null) {
             return;
         }
         Integer port = worker.getClients().get(id);
         SocketChannel socketChannel = worker.getSockets().get(port);
-        if (bytes.length > 67) {
-            sendMsgToClient(msgLength + message.substring(13, 64), socketChannel);
-            Thread.sleep(500);
-            sendMsgToClient(msgLength + id + message.substring(64, message.length()), socketChannel);
+        if (bytes.length > 65) {
+            sendMsgToClient( message.substring(11, 62), socketChannel);
+            sendMsgToClient( id + message.substring(62, message.length()), socketChannel);
         } else {
-            sendMsgToClient(msgLength + message.substring(13, message.length()), socketChannel);
+            sendMsgToClient( id+message.substring(13, message.length()), socketChannel);
         }
 
 
@@ -128,14 +124,24 @@ public class Server {
      * @param socketChannel 客户端信道
      */
     private void sendMsgToClient(String msg, SocketChannel socketChannel) {
+        String message = addPacketLength(msg);
         buffer.clear();
-        buffer.put(msg.getBytes(StandardCharsets.UTF_8));
+        buffer.put(message.getBytes(StandardCharsets.UTF_8));
         buffer.flip();
         try {
             socketChannel.write(buffer);
         } catch (IOException e) {
             log.error("===========发送消息给客户端失败{}", e);
         }
+    }
+
+    private String addPacketLength(String msg) {
+        if (msg.length() < 10) {
+            msg = "0" + msg.length() + msg;
+        } else {
+            msg = msg.length() + msg;
+        }
+        return msg;
     }
 }
 
@@ -296,7 +302,7 @@ class Worker implements Runnable {
      * 上一次发生粘包，这一次读取剩余内容消息
      *
      * @param readableLength 可读字节长度
-     * @param msg            本次读取的全部消息
+     * @param msg            本次要读取的消息正文
      * @param readMsg        上一次读取的消息内容
      * @param channel        信道
      * @param key            SelectionKey
@@ -341,7 +347,7 @@ class Worker implements Runnable {
             // 第三种情况是剩余未读消息包含了下一次新消息包头信息和部分消息体
             if (remainReadable - newMsgLength == 1) {
                 // 第一种情况
-                // 要进行返显的信息
+                // 下一个消息
                 String s = msg.substring(remainMsgLength + 2, readableLength - 1);
                 readChatMsg(s, port, channel, key);
                 // 把下一次新消息的头部第一个字节放入容器

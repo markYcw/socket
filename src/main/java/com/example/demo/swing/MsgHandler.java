@@ -44,10 +44,10 @@ public class MsgHandler {
      */
     public void dealMsg(String message) {
         // 判断是不是给全员发消息 --send-text-to-all第十三个字符是t为判断标准
-        if (message.charAt(10) == 't') {
-            sendAllMsgToServer(message);
+        if (message.charAt(12) == 't') {
+            CompletableFuture.runAsync(()->sendAllMsgToServer(message));
         } else {
-            sendSingleMsgToServer(message);
+            CompletableFuture.runAsync(()->sendSingleMsgToServer(message));
         }
     }
 
