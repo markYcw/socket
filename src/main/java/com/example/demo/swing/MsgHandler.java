@@ -43,13 +43,11 @@ public class MsgHandler {
      * @param message 消息
      */
     public void dealMsg(String message) {
-        // 添加包首部信息
-        String msg = addPacketLength(message);
         // 判断是不是给全员发消息 --send-text-to-all第十三个字符是t为判断标准
-        if (message.charAt(12) == 't') {
-            sendAllMsgToServer(msg);
+        if (message.charAt(10) == 't') {
+            sendAllMsgToServer(message);
         } else {
-            sendSingleMsgToServer(msg);
+            sendSingleMsgToServer(message);
         }
     }
 
@@ -59,33 +57,16 @@ public class MsgHandler {
      * @param message 消息 对于客户端总共有连接/普通聊天消息/关闭连接消息
      */
     public void msgToClient(String message, ChatClientUi ui) {
-        // 添加包首部信息
-        String msg = addPacketLength(message);
         // 判断是普通消息还是链接消息
         if (message.charAt(2) == 'c') {
-            String clientId = message.substring(31, 33);
+            String clientId = message.substring(29, 31);
             // 连接到服务端 发送消息格式为+2位包数据长度信息加实际要发送的消息--connect-server 127.0.0.1 9001 01其中01是客户端id
-            CompletableFuture.runAsync(() -> this.connectToServer(msg,clientId)
+            CompletableFuture.runAsync(() -> this.connectToServer(message, clientId)
             );
             chatUis.put(clientId, ui);
         } else {
             // 发送消息给服务端 发送消息格式为命令+客户端id+消息内容
-            CompletableFuture.runAsync(() -> msgToServer(msg));
-        }
-    }
-
-    /**
-     * 添加包首部信息：包长度 用2位表示数据包长度
-     *
-     * @param msg 需要添加的信息
-     * @return
-     */
-    private String addPacketLength(String msg) {
-        int length = msg.length();
-        if (length > 10) {
-            return String.valueOf(length) + msg;
-        } else {
-            return "0" + String.valueOf(length) + msg;
+            CompletableFuture.runAsync(() -> msgToServer(message));
         }
     }
 
@@ -93,9 +74,9 @@ public class MsgHandler {
      * 客户端发起连接请求连接服务端
      * @param message 链接客户端的消息
      */
-    public void connectToServer(String message,String clientId) {
+    public void connectToServer(String message, String clientId) {
         try {
-            client.connect(message.substring(18, 27), clientId, Integer.valueOf(message.substring(27, 31)));
+            client.connect(message.substring(16, 25), clientId, Integer.valueOf(message.substring(25, 29)));
         } catch (IOException e) {
             log.error("=======客户端连接到服务端异常{}", e);
         }
@@ -109,24 +90,21 @@ public class MsgHandler {
      */
     private void msgToServer(String message) {
         try {
-            //首先获取包长度信息
-            String msgLength = message.substring(0, 2);
             // 先判断是不是关闭连接消息
-            if (message.charAt(4) == 'd') {
-                client.sendMsgToServer(message.substring(21, 23), message);
+            if (message.charAt(2) == 'd') {
+                client.sendMsgToServer(message.substring(19, 21), message);
             } else {
                 // 普通消息
-                String clientId = message.substring(23, 25);
+                String clientId = message.substring(21, 23);
                 if (message.length() > 75) {
                     // 如果消息超过50个字符分两次发送 发送消息格式为：消息长度+消息正文
                     // 提取消息正文
-                    client.sendMsgToServer(clientId, msgLength + message.substring(25, 74));
-                    Thread.sleep(500);
+                    client.sendMsgToServer(clientId, message.substring(23, 74));
                     // 提取消息正文
-                    client.sendMsgToServer(clientId, msgLength + message.substring(75, message.length()));
+                    client.sendMsgToServer(clientId, message.substring(73, message.length()));
                 } else {
                     // 提取消息正文
-                    client.sendMsgToServer(clientId, msgLength + message.substring(25, message.length()));
+                    client.sendMsgToServer(clientId, message.substring(23, message.length()));
                 }
 
             }
@@ -183,7 +161,7 @@ public class MsgHandler {
         String clientId = msg.substring(0, 2);
         if (checkClient(clientId)) {
             // 如果能根据客户端ID找到对应客户端则说明是私发功能，否则是群发消息
-            ChatClientUi ui  = chatUis.get(clientId);
+            ChatClientUi ui = chatUis.get(clientId);
             ui.serverMsgToUi(msg);
         } else {
             // 群发消息

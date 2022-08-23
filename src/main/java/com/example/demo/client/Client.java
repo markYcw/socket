@@ -78,7 +78,7 @@ public class Client {
         channels.put(clientId, socketChannel);
         buffer.clear();
         // 给服务端发送登录消息，消息格式：login+clientId
-        String str = "login" + clientId;
+        String str = "07login" + clientId;
         buffer.put(str.getBytes(StandardCharsets.UTF_8));
         buffer.flip();
         // 发送数据，将buffer数据写入channel
@@ -198,13 +198,24 @@ public class Client {
      * @throws IOException
      */
     public void sendMsgToServer(String clientId, String msg) throws IOException {
+        //添加包头
+        String message = addPacketLength(msg);
         SocketChannel socketChannel = channels.get(clientId);
         if (!ObjectUtils.isEmpty(socketChannel)) {
             buffer.clear();
-            buffer.put(msg.getBytes(StandardCharsets.UTF_8));
+            buffer.put(message.getBytes(StandardCharsets.UTF_8));
             buffer.flip();
             socketChannel.write(buffer);
         }
+    }
+
+    private String addPacketLength(String msg) {
+        if (msg.length() < 10) {
+            msg = "0" + msg.length() + msg;
+        } else {
+            msg = msg.length() + msg;
+        }
+        return msg;
     }
 
 
