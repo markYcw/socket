@@ -35,7 +35,7 @@ public class MsgHandler {
      * 用于对客户端UI进行信息返显
      * key是客户端ID，value是进行返显的对象
      */
-    private ConcurrentHashMap<String, ChatClientUi> chatUis = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ChatClientUi> chatUis = new ConcurrentHashMap<>();
 
     /**
      * 处理消息后把消息转发给服务端
@@ -45,9 +45,9 @@ public class MsgHandler {
     public void dealMsg(String message) {
         // 判断是不是给全员发消息 --send-text-to-all第十三个字符是t为判断标准
         if (message.charAt(12) == 't') {
-            CompletableFuture.runAsync(()->sendAllMsgToServer(message));
+            CompletableFuture.runAsync(() -> sendAllMsgToServer(message));
         } else {
-            CompletableFuture.runAsync(()->sendSingleMsgToServer(message));
+            CompletableFuture.runAsync(() -> sendSingleMsgToServer(message));
         }
     }
 

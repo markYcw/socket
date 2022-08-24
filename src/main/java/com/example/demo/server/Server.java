@@ -108,10 +108,10 @@ public class Server {
         Integer port = worker.getClients().get(id);
         SocketChannel socketChannel = worker.getSockets().get(port);
         if (bytes.length > 65) {
-            sendMsgToClient( message.substring(11, 62), socketChannel);
-            sendMsgToClient( id + message.substring(62, message.length()), socketChannel);
+            sendMsgToClient(message.substring(11, 62), socketChannel);
+            sendMsgToClient(id + message.substring(62, message.length()), socketChannel);
         } else {
-            sendMsgToClient( id+message.substring(13, message.length()), socketChannel);
+            sendMsgToClient(id + message.substring(13, message.length()), socketChannel);
         }
 
 
@@ -152,32 +152,32 @@ class Worker implements Runnable {
      * 此容器用于判断客户端是否已经登录，如果第一次登录则会保存客户端ID和socketChannel的端口
      * 保存客户端ID和对应的socketChannel的关系的容器key是客户端ID，value是socketChannel的端口
      */
-    private ConcurrentHashMap<String, Integer> clients = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Integer> clients = new ConcurrentHashMap<>();
 
     /**
      * 此容器用于根据端口找到其对应的SocketChannel 因为服务端要发消息给客户端的时候需要根据客户端ID对应的端口找到对应的socketChannel进行发送
      * 保存socketChannel的端口和socketChannel的关系的容器key是端口，value是socketChannel
      */
-    private ConcurrentHashMap<Integer, SocketChannel> sockets = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Integer, SocketChannel> sockets = new ConcurrentHashMap<>();
 
 
     /**
      * 此容器用于服务端主动关闭客户端链接 根据端口找到对应的key，然后调用key.cancel关闭客户端连接
      * 保存SelectionKey和对应socketChannel的关系，key是客户端ID对应客户端端口，value是SelectionKey
      */
-    private ConcurrentHashMap<Integer, SelectionKey> keys = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Integer, SelectionKey> keys = new ConcurrentHashMap<>();
 
     /**
      * 此容器用于保存未完整读取的消息（解决TCP粘包、拆包）
      * key是信道，value是已经读取的消息，但此容器还要配合remainMsgLength这个属性使用
      */
-    private ConcurrentHashMap<SocketChannel, String> readMsgPool = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<SocketChannel, String> readMsgPool = new ConcurrentHashMap<>();
 
     /**
      * 此容器用于保存未完整读取的消息（解决TCP粘包、拆包）
      * key是信道，value是已经读取的消息的长度的第一位
      */
-    private ConcurrentHashMap<SocketChannel, String> halfMsgLength = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<SocketChannel, String> halfMsgLength = new ConcurrentHashMap<>();
 
     /**
      * 用于启动worker
@@ -199,6 +199,14 @@ class Worker implements Runnable {
      */
     private Integer remainMsgLength = 0;
 
+    /**
+     * 登录指令前两位字符
+     */
+    private static final String LO = "lo";
+
+    /**
+     * 用于读取客户端发来的消息或者写消息给客户端
+     */
     private final ByteBuffer buffer = ByteBuffer.allocate(70);
 
     /**
@@ -306,6 +314,7 @@ class Worker implements Runnable {
      * @param readMsg        上一次读取的消息内容
      * @param channel        信道
      * @param key            SelectionKey
+     * @param port           端口
      */
     private void readRemainMsg(Integer readableLength, Integer port, String msg, String readMsg, SocketChannel channel, SelectionKey key) {
         // 截取上一次剩余消息
@@ -318,17 +327,18 @@ class Worker implements Runnable {
         String totalMsg = readMsg + remainMsg;
         // 现在只有两种情况：第一种情况这个消息为登录消息消息,格式为：login+clientId，另一种情况:此消息是个普通消息
         String m = totalMsg.substring(0, 2);
-        if (m.equals("lo")) {
+        // 第一个消息只能是登录消息消息格式为：login+clientId。所以前两个字母只能是lo。
+        if (m.equals(LO)) {
             login(totalMsg, port, channel, key);
         } else {
-            readChatMsg(totalMsg, port, channel, key);
+            handleChatMsg(totalMsg, port, channel, key);
         }
         Integer remain = readableLength - remainMsgLength;
         // 判断本次是否还有消息可读,如果未读消息长度等于可读消息长度的话说明可以退出
         if (remain == 0) {
             return;
         }
-        // 如果除去已读内容剩余可读内容只剩一个字节
+        // 如果除去已读内容剩余可读内容只剩一个字节，那么这个字节内容肯定是下一个消息包头的第一个字节
         if (remain == 1) {
             // 记录本次读到的包头第一位内容
             halfMsgLength.put(channel, msg.substring(readableLength - 1));
@@ -339,40 +349,10 @@ class Worker implements Runnable {
         Integer remainReadable = readableLength - remainMsgLength - 2;
         // 如果新消息长度等于剩余可读消息长度则直接读
         if (remainReadable == newMsgLength) {
-            readChatMsg(totalMsg, port, channel, key);
+            handleChatMsg(totalMsg, port, channel, key);
         } else if (newMsgLength < remainReadable) {
             // 如果新消息长度小于剩余可读长度说明又发生了粘包现象
-            // 这时候又分三种情况第一种情况是剩余未读消息里只包含一位下一个新消息的包头的第一位数字
-            // 第二种情况是剩余未读消息里包含了下一次新消息包头信息
-            // 第三种情况是剩余未读消息包含了下一次新消息包头信息和部分消息体
-            if (remainReadable - newMsgLength == 1) {
-                // 第一种情况
-                // 下一个消息
-                String s = msg.substring(remainMsgLength + 2, readableLength - 1);
-                readChatMsg(s, port, channel, key);
-                // 把下一次新消息的头部第一个字节放入容器
-                halfMsgLength.put(channel, msg.substring(readableLength - 1));
-            } else if (remainReadable - newMsgLength == 2) {
-                // 第二种情况
-                String s = msg.substring(remainMsgLength + 2, readableLength - 2);
-                readChatMsg(s, port, channel, key);
-                // 记录剩余未读字节数
-                remainMsgLength = Integer.valueOf(msg.substring(readableLength - 2));
-                readMsgPool.put(channel, "");
-            } else {
-                // 第三种情况剩余未读消息包含了下一次新消息包头信息和部分消息体
-                String s = msg.substring(remainMsgLength + 2, newMsgLength);
-                readChatMsg(s, port, channel, key);
-                // 读取下一个消息包头
-                Integer nextMsgLength = Integer.valueOf(msg.substring(remainMsgLength + 2 + newMsgLength), remainMsgLength + 2 + newMsgLength + 2);
-                // 读取下一个消息的部分消息,并把它放入容器
-                String nextMsg = msg.substring(remainMsgLength + 2 + newMsgLength + 2);
-                readMsgPool.put(channel, nextMsg);
-                // 已读取下一个消息的长度为：可读长度 - （下一个消息头部索引 +2）
-                Integer readNextMsgLength = readableLength - (remainMsgLength + 2 + newMsgLength + 2);
-                // 重置剩余未读内容长度
-                remainMsgLength = nextMsgLength - readNextMsgLength;
-            }
+            dealPacketSplicing(remainReadable, newMsgLength, readableLength, msg, channel, port, key);
         } else {
             // 如果新消息长度大于剩余可读长度说明又发生了拆包现象
             // 先把本次读取到的部分消息存储到容器
@@ -384,14 +364,61 @@ class Worker implements Runnable {
     }
 
     /**
-     * 读取普通聊天消息
+     * 处理粘包问题
+     *
+     * @param remainReadable 剩余可读字节数
+     * @param newMsgLength   新消息字节数
+     * @param readableLength 本次要读取的可读字节长度
+     * @param msg            本次要读取的消息正文
+     * @param channel        信道
+     * @param key            SelectionKey
+     * @param port           端口
+     */
+    private void dealPacketSplicing(Integer remainReadable, Integer newMsgLength, Integer readableLength, String msg, SocketChannel channel, Integer port, SelectionKey key) {
+        // 这时候又分三种情况：第一种情况是剩余未读消息里只包含一位下一个新消息的包头的第一位数字
+        // 第二种情况是剩余未读消息里包含了下一次新消息包头信息
+        // 第三种情况是剩余未读消息包含了下一次新消息包头信息和部分消息体
+        if (remainReadable - newMsgLength == 1) {
+            // 第一种情况
+            // 下一个消息
+            String s = msg.substring(remainMsgLength + 2, readableLength - 1);
+            handleChatMsg(s, port, channel, key);
+            // 把下一次新消息的头部第一个字节放入容器
+            halfMsgLength.put(channel, msg.substring(readableLength - 1));
+        } else if (remainReadable - newMsgLength == 2) {
+            // 第二种情况
+            // 下一个消息
+            String s = msg.substring(remainMsgLength + 2, readableLength - 2);
+            handleChatMsg(s, port, channel, key);
+            // 记录剩余未读字节数
+            remainMsgLength = Integer.valueOf(msg.substring(readableLength - 2));
+            readMsgPool.put(channel, "");
+        } else {
+            // 第三种情况剩余未读消息包含了下一次新消息包头信息和部分消息体
+            // 下一个消息
+            String s = msg.substring(remainMsgLength + 2, newMsgLength);
+            handleChatMsg(s, port, channel, key);
+            // 读取下一个消息包头
+            Integer nextMsgLength = Integer.valueOf(msg.substring(remainMsgLength + 2 + newMsgLength), remainMsgLength + 2 + newMsgLength + 2);
+            // 读取下一个消息的部分消息,并把它放入容器
+            String nextMsg = msg.substring(remainMsgLength + 2 + newMsgLength + 2);
+            readMsgPool.put(channel, nextMsg);
+            // 已读取下一个消息的长度为：可读长度 - （下一个消息头部索引 +2）
+            Integer readNextMsgLength = readableLength - (remainMsgLength + 2 + newMsgLength + 2);
+            // 重置剩余未读内容长度
+            remainMsgLength = nextMsgLength - readNextMsgLength;
+        }
+    }
+
+    /**
+     * 处理普通消息
      *
      * @param message 聊天消息
      * @param port    客户端端口
      * @param channel 信道
      * @param key     SelectionKey
      */
-    private void readChatMsg(String message, Integer port, SocketChannel channel, SelectionKey key) {
+    private void handleChatMsg(String message, Integer port, SocketChannel channel, SelectionKey key) {
         // 如果不是登录消息则判断这个信道是否在容器里如果不在容器里说明他发的第一个消息不是登录消息则断开连接，如果在容器里则有两种情况
         // 第一种情况是个普通消息，则给ServerMsgReceiver返回。另一种情况这个消息是个主动断开连接消息--disconnect-server+clientId
         if (checkClient(port)) {
@@ -406,7 +433,6 @@ class Worker implements Runnable {
                 String id = clientId + ":";
                 StringBuilder totalMsg = new StringBuilder(id + message);
                 ContextUtils.getBean(MsgHandler.class).clientMsgToServerUi(totalMsg);
-
             }
         } else {
             // 这种情况说明他发的第一个消息不是登录消息需要直接断开连接
@@ -428,7 +454,7 @@ class Worker implements Runnable {
         String clientId = msg.substring(5, 7);
         Integer clientPort = clients.get(clientId);
         if (clientPort != null) {
-            // 如果如果收到重复的clientId，则断开前一个连接
+            // 如果如果收到重复的clientId，则断开前一个连接,并只保留现在这个连接
             log.info("==========同一个客户端登录断开之前客户端连接=======");
             SelectionKey selectionKey = keys.get(clientPort);
             selectionKey.cancel();
@@ -545,7 +571,7 @@ class Worker implements Runnable {
                                 readMsg(buffer, key, channel);
                             }
                         } catch (IOException e) {
-                            e.printStackTrace();
+                            log.error("===========客户端断开了连接~~");
                             // 如果客户端被强制关闭那么把key从selectedKey集合中移除
                             key.cancel();
                         }

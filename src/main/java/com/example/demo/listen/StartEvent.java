@@ -28,7 +28,7 @@ public class StartEvent implements CommandLineRunner {
     private Server server;
 
     @Override
-    public void run(String... args) throws Exception {
+    public void run(String... args) {
         //服务端初始化
         CompletableFuture.runAsync(() -> {
             try {
