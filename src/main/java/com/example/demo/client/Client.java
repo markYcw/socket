@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
 
+import javax.sound.sampled.Port;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -38,15 +39,9 @@ public class Client {
 
     /**
      * 此容器用于保存未完整读取的消息（解决TCP粘包、拆包）
-     * key是信道，value是已经读取的消息，但此容器还要配合remainMsgLength这个属性使用
+     * key是信道，value是ByteBuffer
      */
-    private final ConcurrentHashMap<SocketChannel, String> readMsgPool = new ConcurrentHashMap<>();
-
-    /**
-     * 此容器用于保存未完整读取的消息（解决TCP粘包、拆包）
-     * key是信道，value是已经读取的消息的长度的第一位
-     */
-    private final ConcurrentHashMap<SocketChannel, String> halfMsgLength = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<SocketChannel, ByteBuffer> byteBuffers = new ConcurrentHashMap<>();
 
     /**
      * 选择器
@@ -54,11 +49,6 @@ public class Client {
     private Selector selector;
 
     private static final String LOGIN = "login";
-
-    /**
-     * 此变量用于记录还需要读取的长度
-     */
-    private Integer remainMsgLength = 0;
 
     /**
      * 连接服务端
@@ -136,7 +126,7 @@ public class Client {
                          * SelectionKey.OP_READ    是否可读
                          *  SelectionKey.OP_WRITE  是否可写
                          */
-                        this.handleServerInput(key, (SocketChannel) key.channel());
+                        this.dealBytebuffer(key, (SocketChannel) key.channel());
                     }
                 }
             } catch (IOException e) {
@@ -146,12 +136,12 @@ public class Client {
     }
 
     /**
-     * 处理服务端发来数据
+     * 判断上一次是否出现拆包粘包情况
      *
      * @param key SelectionKey
      * @throws IOException IO异常
      */
-    private synchronized void handleServerInput(SelectionKey key, SocketChannel channel) {
+    private synchronized void dealBytebuffer(SelectionKey key, SocketChannel channel) {
         SocketChannel sc = (SocketChannel) key.channel();
         //如果客户端接收到了服务器端发送的应答消息 则SocketChannel是可读的
         if (key.isReadable()) {
@@ -163,138 +153,79 @@ public class Client {
             } catch (IOException e) {
                 log.error("======服务端断开了连接~~~~");
                 key.cancel();
+                removeCache();
+                return;
             }
             if (read == -1) {
                 key.cancel();
+                removeCache();
+                return;
             }
-            buffer.flip();
-            byte[] readByte = new byte[buffer.remaining()];
-            buffer.get(readByte);
-            String s = new String(readByte);
-            Integer readableLength = readByte.length;
-            // 判断此次消息的头两位是否是包头。这时分三种情况：第一种就是这是这次没有发生粘包拆包现象这种直接读取就好了。第二种就是上一次发生粘包现象。
-            // 第三种情况是上一次发生拆包现象。
-            if (readMsgPool.containsKey(channel)) {
-                // 如果消息池里有这个key说明发生了拆包或者粘包的现象需要把消息池里消息取出
-                // 这种情况是上一次读取了部分内容
-                String readMsg = readMsgPool.get(channel);
-                readRemainMsg(readableLength, s, readMsg, channel);
-            } else if (halfMsgLength.containsKey(channel)) {
-                // 如果在这个半个消息长度的容器里面能找到说明上一次只读取到消息头部的第一个字节
-                // 取出容器记录的头部消息第一位
-                String msgLengthFirst = halfMsgLength.get(channel);
-                // 获取头部消息第二位
-                String msgLengthSecond = s.substring(0, 1);
-                // 头部消息长度字符串
-                String msgLength = msgLengthFirst + msgLengthSecond;
-                // 这时未读字节就是这个消息的长度
-                remainMsgLength = Integer.valueOf(msgLength);
-                // 截取消息这时候的消息要把第一位头部消息截掉，剩余的消息读取方法和第一种年报拆包方法一样
-                String msg = s.substring(1);
-                readRemainMsg(readableLength - 1, msg, "", channel);
-            } else {
+            // 判断上一次是否发生拆包现象。
+            if (byteBuffers.containsKey(channel)) {
+                // 如果消息池里有这个key说明发生了拆包或者粘包的现象需要把缓存的Bytebuffer取出
+                ByteBuffer cacheBuffer = byteBuffers.get(channel);
+                // 把两个包合在一起
+                cacheBuffer.put(buffer);
+                // 读取包数据
+                dealMsg(cacheBuffer,channel);
+            }  else {
                 // 如果没有发生拆包粘包现象则正常读取
-                remainMsgLength = Integer.valueOf(s.substring(0, 2));
-                readRemainMsg(readableLength - 2, s.substring(2), "", channel);
+                dealMsg(buffer, channel);
             }
-            buffer.clear();
         }
 
     }
 
     /**
-     * 上一次发生粘包，这一次读取剩余内容消息
+     * 处理包数据
      *
-     * @param readableLength 本次要读取的可读字节长度
-     * @param msg            本次要读取的消息正文
-     * @param readMsg        上一次读取的消息内容
-     * @param channel        信道
+     * @param buffer ByteBuffer
+     * @param channel 信道
      */
-    private void readRemainMsg(Integer readableLength, String msg, String readMsg, SocketChannel channel) {
-        // 截取上一次剩余消息
-        String remainMsg = null;
-        try {
-            remainMsg = msg.substring(0, remainMsgLength);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        String totalMsg = readMsg + remainMsg;
+    private void dealMsg(ByteBuffer buffer, SocketChannel channel) {
+        // 切换读模式
+        buffer.flip();
+        // 读取readBuf数据 然后打印数据
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.get(bytes);
+        String msg = new String(bytes);
+        // 首先确定消息长度
+        Integer msgLength = Integer.valueOf(msg.substring(0,2));
+        // 得到第一个消息
+        String firstMsg = msg.substring(2,2+msgLength);
         // 如果是私聊消息则消息格式为：包头+客户端ID+消息正文，如果是群聊消息则消息格式为：包头+消息正文
-        chatMsgToHandler(totalMsg);
-        Integer remain = readableLength - remainMsgLength;
-        // 判断本次是否还有消息可读,如无可读消息则退出
+        chatMsgToHandler(firstMsg);
+        // 包长度减2位包头长度得到包可读长度，现在判断包可读长度和消息长度的差值
+        // 如果差值等于0说明包刚好读完跳出循环
+        // 如果差值小于0则说明是拆包情况则把包进行缓存并跳出循环
+        // 如果差值大于0则说明发生粘包情况则递归调用本方法
+        Integer remain = buffer.limit()-2-msgLength;
+        String remainMsg = "";
+        if (remain != 0){
+             // 先得到剩余包：剩余的包 = 总消息 - 已读包
+             remainMsg = msg.substring(2+firstMsg.length());
+        }
         if (remain == 0) {
+            buffer.clear();
             return;
-        }
-        // 如果除去已读内容剩余可读内容只剩一个字节，那么这个字节内容肯定是下一个消息包头的第一个字节
-        if (remain == 1) {
-            // 记录本次读到的包头第一位内容
-            halfMsgLength.put(channel, msg.substring(readableLength - 1));
-        }
-        // 读取剩余消息包头
-        Integer newMsgLength = Integer.valueOf(msg.substring(remainMsgLength, remainMsgLength + 2));
-        // 剩余可读字节数
-        Integer remainReadable = readableLength - remainMsgLength - 2;
-        if (remainReadable == newMsgLength) {
-            // 如果新消息长度等于剩余可读消息长度则直接读
-            chatMsgToHandler(msg.substring(remainMsgLength + 2));
-        } else if (newMsgLength < remainReadable) {
-            // 如果新消息长度小于剩余可读长度说明又发生了粘包现象
-            dealPacketSplicing(remainReadable, newMsgLength, readableLength, msg, channel);
-        } else {
-            // 如果新消息长度大于剩余可读长度说明又发生了拆包现象
-            // 先把本次读取到的部分消息存储到容器
-            String s = msg.substring(remainMsgLength + 2);
-            readMsgPool.put(channel, s);
-            //剩余未读字节数 = 包头 - 剩余可读字节数
-            remainMsgLength = newMsgLength - remainReadable;
+        }else if(remain < 0){
+            // 先得到剩余包：剩余的包 = 总消息 - 已读包
+            // 把剩余的包放进缓存
+            ByteBuffer cacheBuffer = ByteBuffer.allocate(100);
+            cacheBuffer.put(remainMsg.getBytes(StandardCharsets.UTF_8));
+            byteBuffers.put(channel,cacheBuffer);
+            buffer.clear();
+            return;
+        } else{
+            // 先得到剩余包：剩余的包 = 总消息 - 已读包
+            // 然后递归调用此方法进行拆包处理
+            buffer.clear();
+            buffer.put(remainMsg.getBytes(StandardCharsets.UTF_8));
+            dealMsg(buffer,channel);
         }
     }
 
-    /**
-     * 处理粘包问题
-     *
-     * @param remainReadable 剩余可读字节数
-     * @param newMsgLength   新消息字节数
-     * @param readableLength 本次要读取的可读字节长度
-     * @param msg            本次要读取的消息正文
-     * @param channel        信道
-     */
-    private void dealPacketSplicing(Integer remainReadable, Integer newMsgLength, Integer readableLength, String msg, SocketChannel channel) {
-        // 这时候又分三种情况:第一种情况是剩余未读消息里只包含一位下一个新消息的包头的第一位数字
-        // 第二种情况是剩余未读消息里包含了下一次新消息包头信息
-        // 第三种情况是剩余未读消息包含了下一次新消息包头信息和部分消息体
-        if (remainReadable - newMsgLength == 1) {
-            // 第一种情况
-            // 下一个消息
-            String s = msg.substring(remainMsgLength + 2, readableLength - 1);
-            chatMsgToHandler(s);
-            // 把下一次新消息的头部第一个字节放入容器
-            halfMsgLength.put(channel, msg.substring(readableLength - 1));
-        } else if (remainReadable - newMsgLength == 2) {
-            // 第二种情况
-            // 下一个消息
-            String s = msg.substring(remainMsgLength + 2, readableLength - 2);
-            chatMsgToHandler(s);
-            // 记录剩余未读字节数
-            remainMsgLength = Integer.valueOf(msg.substring(readableLength - 2));
-            readMsgPool.put(channel, "");
-        } else {
-            // 第三种情况剩余未读消息包含了下一次新消息包头信息和部分消息体
-            // 下一个消息
-            String s = msg.substring(remainMsgLength + 2, newMsgLength);
-            chatMsgToHandler(s);
-            // 读取下一个消息包头
-            Integer nextMsgLength = Integer.valueOf(msg.substring(remainMsgLength + 2 + newMsgLength), remainMsgLength + 2 + newMsgLength + 2);
-            // 读取下一个消息的部分消息,并把它放入容器
-            String nextMsg = msg.substring(remainMsgLength + 2 + newMsgLength + 2);
-            readMsgPool.put(channel, nextMsg);
-            // 已读取下一个消息的长度为：可读长度 - （下一个消息头部索引 +2）
-            Integer readNextMsgLength = readableLength - (remainMsgLength + 2 + newMsgLength + 2);
-            // 重置剩余未读内容长度
-            remainMsgLength = nextMsgLength - readNextMsgLength;
-        }
-    }
 
     /**
      * 把消息转发给msgHandler进行下一步处理
@@ -335,6 +266,14 @@ public class Client {
             msg = msg.length() + msg;
         }
         return msg;
+    }
+
+    /**
+     * 服务端和客户端断链以后清楚缓存
+     */
+    private void removeCache(){
+        channels.clear();
+        byteBuffers.clear();
     }
 
 
