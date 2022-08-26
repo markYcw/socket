@@ -5,8 +5,6 @@ import com.example.demo.utils.ContextUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
-
-import javax.sound.sampled.Port;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -33,17 +31,6 @@ public class Client {
     private final ConcurrentHashMap<String, SocketChannel> channels = new ConcurrentHashMap<>();
 
     /**
-     * ByteBuffer客户端读取服务端发来的信息或者是写入信息给服务端都通过这个字节缓冲区
-     */
-    private final ByteBuffer buffer = ByteBuffer.allocate(100);
-
-    /**
-     * 此容器用于保存未完整读取的消息（解决TCP粘包、拆包）
-     * key是信道，value是ByteBuffer
-     */
-    private final ConcurrentHashMap<SocketChannel, ByteBuffer> byteBuffers = new ConcurrentHashMap<>();
-
-    /**
      * 选择器
      */
     private Selector selector;
@@ -59,7 +46,7 @@ public class Client {
      * @throws IOException IO异常
      */
     public void connect(String ip, String clientId, Integer port) throws IOException {
-
+       ByteBuffer buffer = ByteBuffer.allocate(100);
         // 得到一个网络通道
         SocketChannel socketChannel = SocketChannel.open();
 
@@ -109,6 +96,11 @@ public class Client {
      * 多路复用部分。当select检测到有可读事件则读取服务端所发来的信息,并做相应处理
      */
     private void readMsg() {
+        /*
+         * 此容器用于保存未完整读取的消息（解决TCP粘包、拆包）
+         * key是信道，value是ByteBuffer
+         */
+        ByteBuffer cacheBuffer = ByteBuffer.allocate(100);
         while (true) {
             try {
                 selector.select();
@@ -126,7 +118,7 @@ public class Client {
                          * SelectionKey.OP_READ    是否可读
                          *  SelectionKey.OP_WRITE  是否可写
                          */
-                        this.dealBytebuffer(key, (SocketChannel) key.channel());
+                        this.dealBytebuffer(key, (SocketChannel) key.channel(),cacheBuffer);
                     }
                 }
             } catch (IOException e) {
@@ -141,7 +133,8 @@ public class Client {
      * @param key SelectionKey
      * @throws IOException IO异常
      */
-    private synchronized void dealBytebuffer(SelectionKey key, SocketChannel channel) {
+    private void dealBytebuffer(SelectionKey key, SocketChannel channel, ByteBuffer cacheBuffer) {
+        ByteBuffer buffer = ByteBuffer.allocate(100);
         SocketChannel sc = (SocketChannel) key.channel();
         //如果客户端接收到了服务器端发送的应答消息 则SocketChannel是可读的
         if (key.isReadable()) {
@@ -153,25 +146,25 @@ public class Client {
             } catch (IOException e) {
                 log.error("======服务端断开了连接~~~~");
                 key.cancel();
-                removeCache();
+                removeCache(cacheBuffer);
                 return;
             }
             if (read == -1) {
                 key.cancel();
-                removeCache();
+                removeCache(cacheBuffer);
                 return;
             }
             // 判断上一次是否发生拆包现象。
-            if (byteBuffers.containsKey(channel)) {
+            if (cacheBuffer.position()>0) {
                 // 如果消息池里有这个key说明发生了拆包或者粘包的现象需要把缓存的Bytebuffer取出
-                ByteBuffer cacheBuffer = byteBuffers.get(channel);
                 // 把两个包合在一起
                 cacheBuffer.put(buffer);
+                cacheBuffer.clear();
                 // 读取包数据
-                dealMsg(cacheBuffer,channel);
+                dealMsg(cacheBuffer,cacheBuffer);
             }  else {
                 // 如果没有发生拆包粘包现象则正常读取
-                dealMsg(buffer, channel);
+                dealMsg(buffer, cacheBuffer);
             }
         }
 
@@ -180,10 +173,10 @@ public class Client {
     /**
      * 处理包数据
      *
-     * @param buffer ByteBuffer
-     * @param channel 信道
+     * @param buffer 本次要读取的包
+     * @param cacheBuffer cacheBuffer 缓存临时包的buffer
      */
-    private void dealMsg(ByteBuffer buffer, SocketChannel channel) {
+    private void dealMsg(ByteBuffer buffer, ByteBuffer cacheBuffer) {
         // 切换读模式
         buffer.flip();
         // 读取readBuf数据 然后打印数据
@@ -212,9 +205,8 @@ public class Client {
         }else if(remain < 0){
             // 先得到剩余包：剩余的包 = 总消息 - 已读包
             // 把剩余的包放进缓存
-            ByteBuffer cacheBuffer = ByteBuffer.allocate(100);
-            cacheBuffer.put(remainMsg.getBytes(StandardCharsets.UTF_8));
-            byteBuffers.put(channel,cacheBuffer);
+            ByteBuffer cacheByteBuffer = ByteBuffer.allocate(100);
+            cacheByteBuffer.put(remainMsg.getBytes(StandardCharsets.UTF_8));
             buffer.clear();
             return;
         } else{
@@ -222,7 +214,7 @@ public class Client {
             // 然后递归调用此方法进行拆包处理
             buffer.clear();
             buffer.put(remainMsg.getBytes(StandardCharsets.UTF_8));
-            dealMsg(buffer,channel);
+            dealMsg(buffer,cacheBuffer);
         }
     }
 
@@ -248,6 +240,7 @@ public class Client {
      * @throws IOException
      */
     public synchronized void sendMsgToServer(String clientId, String msg) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(100);
         //添加包头
         String message = addPacketLength(msg);
         SocketChannel socketChannel = channels.get(clientId);
@@ -271,7 +264,7 @@ public class Client {
     /**
      * 服务端和客户端断链以后清楚缓存
      */
-    private void removeCache(){
+    private void removeCache(ByteBuffer byteBuffers){
         channels.clear();
         byteBuffers.clear();
     }

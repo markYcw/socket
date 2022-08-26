@@ -24,10 +24,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 public class Server {
-    /**
-     * ByteBuffer 字节缓冲区用于写信息给客户端
-     */
-    private final ByteBuffer buffer = ByteBuffer.allocate(70);
 
     /**
      * 工作线程专门用于处理读写事件
@@ -122,6 +118,7 @@ public class Server {
      * @param socketChannel 客户端信道
      */
     private void sendMsgToClient(String msg, SocketChannel socketChannel) {
+        ByteBuffer buffer = ByteBuffer.allocate(70);
         String message = addPacketLength(msg);
         buffer.clear();
         buffer.put(message.getBytes(StandardCharsets.UTF_8));
@@ -166,12 +163,6 @@ class Worker implements Runnable {
     private final ConcurrentHashMap<Integer, SelectionKey> keys = new ConcurrentHashMap<>();
 
     /**
-     * 此容器用于保存未完整读取的消息（解决TCP粘包、拆包）
-     * key是信道，value是ByteBuffer
-     */
-    private final ConcurrentHashMap<SocketChannel, ByteBuffer> byteBuffers = new ConcurrentHashMap<>();
-
-    /**
      * 用于启动worker
      */
     private Thread thread;
@@ -190,11 +181,6 @@ class Worker implements Runnable {
      * 登录指令前两位字符
      */
     private static final String LO = "lo";
-
-    /**
-     * 用于读取客户端发来的消息或者写消息给客户端
-     */
-    private final ByteBuffer buffer = ByteBuffer.allocate(100);
 
     /**
      * 线程是否启动
@@ -249,7 +235,7 @@ class Worker implements Runnable {
      * @param key    SelectionKey
      * @throws IOException IO异常
      */
-    private void dealBytebuffer(ByteBuffer source, SelectionKey key, SocketChannel channel) throws IOException {
+    private void dealBytebuffer(ByteBuffer source, SelectionKey key, SocketChannel channel,  ConcurrentHashMap<SocketChannel,ByteBuffer> byteBuffers) throws IOException {
         // 获取端口
         InetSocketAddress address = null;
         try {
@@ -262,13 +248,14 @@ class Worker implements Runnable {
         if (byteBuffers.containsKey(channel)) {
             // 如果消息池里有这个key说明发生了拆包或者粘包的现象需要把缓存的Bytebuffer取出
             ByteBuffer cacheBuffer = byteBuffers.get(channel);
+            byteBuffers.remove(channel);
             // 把两个包合在一起
             cacheBuffer.put(source);
             // 读取包数据
-            dealMsg(port,cacheBuffer,channel,key);
+            dealMsg(port,cacheBuffer,channel,key,byteBuffers);
         }  else {
             // 如果没有发生拆包粘包现象则正常读取
-            dealMsg(port,source, channel, key);
+            dealMsg(port,source, channel, key,byteBuffers);
         }
     }
 
@@ -280,7 +267,7 @@ class Worker implements Runnable {
      * @param key SelectionKey
      * @param port 端口
      */
-    private void dealMsg(Integer port, ByteBuffer buffer, SocketChannel channel, SelectionKey key) {
+    private void dealMsg(Integer port, ByteBuffer buffer, SocketChannel channel, SelectionKey key, ConcurrentHashMap<SocketChannel,ByteBuffer> byteBuffers) {
         // 切换读模式
         buffer.flip();
         // 读取readBuf数据 然后打印数据
@@ -297,7 +284,7 @@ class Worker implements Runnable {
         if (m.equals(LO)) {
             login(firstMsg, port, channel, key);
         } else {
-            handleChatMsg(firstMsg, port, channel, key);
+            handleChatMsg(firstMsg, port, channel, key,byteBuffers);
         }
         // 包长度减2位包头长度得到包可读长度，现在判断包可读长度和消息长度的差值
         // 如果差值等于0说明包刚好读完跳出循环
@@ -325,7 +312,7 @@ class Worker implements Runnable {
             // 然后递归调用此方法进行拆包处理
             buffer.clear();
             buffer.put(remainMsg.getBytes(StandardCharsets.UTF_8));
-            dealMsg(port,buffer,channel,key);
+            dealMsg(port,buffer,channel,key,byteBuffers);
         }
     }
 
@@ -337,7 +324,7 @@ class Worker implements Runnable {
      * @param channel 信道
      * @param key     SelectionKey
      */
-    private void handleChatMsg(String message, Integer port, SocketChannel channel, SelectionKey key) {
+    private void handleChatMsg(String message, Integer port, SocketChannel channel, SelectionKey key, ConcurrentHashMap<SocketChannel,ByteBuffer> byteBuffers) {
         // 如果不是登录消息则判断这个信道是否在容器里如果不在容器里说明他发的第一个消息不是登录消息则断开连接，如果在容器里则有两种情况
         // 第一种情况是个普通消息，则给ServerMsgReceiver返回。另一种情况这个消息是个主动断开连接消息--disconnect-server+clientId
         if (checkClient(port)) {
@@ -345,7 +332,7 @@ class Worker implements Runnable {
             String clientId = getClientId(port);
             if (message.charAt(4) == 'd') {
                 // 如果是断开客户端连接就是断开相应的客户端连接
-                offLine(channel);
+                offLine(channel,byteBuffers);
             } else {
                 // 如果是普通消息就进行返显
                 // 消息加上客户端ID
@@ -437,7 +424,7 @@ class Worker implements Runnable {
      *
      * @param socketChannel 要下线的信道
      */
-    private void offLine(SocketChannel socketChannel) {
+    private void offLine(SocketChannel socketChannel, ConcurrentHashMap<SocketChannel,ByteBuffer> byteBuffers) {
         InetSocketAddress address = null;
         try {
             address = (InetSocketAddress) socketChannel.getRemoteAddress();
@@ -469,6 +456,11 @@ class Worker implements Runnable {
     public void run() {
         try {
             while (true) {
+                /*
+                 * 此容器用于保存未完整读取的消息（解决TCP粘包、拆包）
+                 * key是信道，value是ByteBuffer
+                 */
+                ConcurrentHashMap<SocketChannel, ByteBuffer> byteBuffers = new ConcurrentHashMap<>();
                 selector.select();
                 Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
                 while (iterator.hasNext()) {
@@ -479,22 +471,23 @@ class Worker implements Runnable {
                     iterator.remove();
                     if ((key.isReadable())) {
                         try {
+                            ByteBuffer buffer = ByteBuffer.allocate(100);
                             SocketChannel channel = (SocketChannel) key.channel();
                             // 如果客户端是正常断开的话，read方法的返回值是-1
                             int read = channel.read(buffer);
                             if (read == -1) {
                                 key.cancel();
                                 // 从client中移除下线的客户端
-                                offLine(channel);
+                                offLine(channel,byteBuffers);
                             } else {
-                                dealBytebuffer(buffer, key, channel);
+                                dealBytebuffer(buffer, key, channel,byteBuffers);
                             }
                         } catch (IOException e) {
                             log.error("===========客户端断开了连接~~");
                             // 如果客户端被强制关闭那么把key从selectedKey集合中移除
                             key.cancel();
                             SocketChannel channel = (SocketChannel) key.channel();
-                            offLine(channel);
+                            offLine(channel,byteBuffers);
                         }
                     }
                 }
